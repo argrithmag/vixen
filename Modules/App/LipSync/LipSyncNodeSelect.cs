@@ -6,18 +6,26 @@ using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
+using Common.Controls;
+using Common.Controls.Theme;
+using Common.Resources.Properties;
 using Vixen.Sys;
 
 namespace VixenModules.App.LipSyncApp
 {
-    public partial class LipSyncNodeSelect : Form
+	public partial class LipSyncNodeSelect : BaseForm
     {
         private bool _userAdd;
         private bool _stringAreRows;
 
         public LipSyncNodeSelect()
         {
-            InitializeComponent();
+			Location = ActiveForm != null ? new Point(ActiveForm.Location.X + 50, ActiveForm.Location.Y + 50) : new Point(400, 200);
+			InitializeComponent();
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			ThemeUpdateControls.UpdateControls(this);
+			Icon = Resources.Icon_Vixen3;
             Changed = false;
             _userAdd = false;
             _matrixOptsOnly = false;
@@ -110,7 +118,7 @@ namespace VixenModules.App.LipSyncApp
             }
         }
 
-        private void resetButton_Click(object sender, EventArgs e)
+        private void buttonReset_Click(object sender, EventArgs e)
         {
             _origNodeNames.Clear();
             chosenTargets.Items.Clear();
@@ -163,7 +171,7 @@ namespace VixenModules.App.LipSyncApp
             }
         }
 
-        private void addButton_Click(object sender, EventArgs e)
+        private void buttonAdd_Click(object sender, EventArgs e)
         {
             foreach (TreeNode treeNode in nodeTreeView.SelectedNodes)
             {
@@ -172,7 +180,7 @@ namespace VixenModules.App.LipSyncApp
             _userAdd = true;
         }
 
-        private void removeButton_Click(object sender, EventArgs e)
+        private void buttonRemove_Click(object sender, EventArgs e)
         {
             for (int i = chosenTargets.SelectedIndices.Count - 1; i >= 0; i--)
             {
@@ -197,18 +205,37 @@ namespace VixenModules.App.LipSyncApp
         {
             if (_stringAreRows != StringsAreRows)
             {
-                DialogResult dr = 
-                    MessageBox.Show("Changing Matrix Orientation will modify existing matrix data!" +
-                    Environment.NewLine + "Press Cancel to keep existing matrix orientation" + 
-                    Environment.NewLine + "Press OK to continue", 
-                    "Warning!",  MessageBoxButtons.OKCancel);
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Question; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm("Changing Matrix Orientation will modify existing matrix data!" +
+					Environment.NewLine + "Press Cancel to keep existing matrix orientation" +
+					Environment.NewLine + "Press OK to continue",
+					"Warning!", false, true);
+				messageBox.ShowDialog();
 
-                if (dr == DialogResult.Cancel)
+				if (messageBox.DialogResult == DialogResult.Cancel)
                 {
                     e.Cancel = true;
                     StringsAreRows = _stringAreRows;
                 }
             }
         }
-    }
+
+		private void buttonBackground_MouseHover(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImageHover;
+		}
+
+		private void buttonBackground_MouseLeave(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImage;
+		}
+
+		private void groupBoxes_Paint(object sender, PaintEventArgs e)
+		{
+			ThemeGroupBoxRenderer.GroupBoxesDrawBorder(sender, e, Font);
+		}
+	}
 }

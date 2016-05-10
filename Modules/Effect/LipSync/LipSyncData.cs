@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Runtime.Serialization;
 using Vixen.Module;
+using VixenModules.App.LipSyncApp;
 
 namespace VixenModules.Effect.LipSync
 {
@@ -11,7 +12,7 @@ namespace VixenModules.Effect.LipSync
     internal class LipSyncData : ModuleDataModelBase
     {
         [DataMember]
-        public String StaticPhoneme { get; set; }
+        public PhonemeType StaticPhoneme { get; set; }
 
         [DataMember]
         public String PhonemeMapping { get; set; }
@@ -21,8 +22,9 @@ namespace VixenModules.Effect.LipSync
 
         public LipSyncData()
         {
-            StaticPhoneme = "REST";
-            PhonemeMapping = "";
+	        LyricData = string.Empty;
+            StaticPhoneme = PhonemeType.REST;
+            PhonemeMapping = string.Empty;
         }
 
         public override IModuleDataModel Clone()

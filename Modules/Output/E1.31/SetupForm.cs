@@ -26,8 +26,8 @@
 // or implied, of Joshua 1 Systems Inc.
 // =====================================================================
 
-namespace VixenModules.Output.E131
-{
+using Common.Controls;
+using Common.Controls.Theme;
     using System;
     using System.Collections.Generic;
     using System.ComponentModel;
@@ -35,25 +35,28 @@ namespace VixenModules.Output.E131
     using System.Net.NetworkInformation;
     using System.Text;
     using System.Windows.Forms;
+    using Common.Resources;
+    using Common.Resources.Properties;
     using VixenModules.Controller.E131;
     using VixenModules.Controller.E131.J1Sys;
+    using System.Drawing;
+    using System.Linq;
+    using Vixen.Sys;
 
-    public partial class SetupForm : Form
+namespace VixenModules.Output.E131
+{
+	public partial class SetupForm : BaseForm
     {
         // column indexes - must be changed if column addrange code is changed
         // could refactor to a variable and initialize it at column add time
         // but then it wouldn't work well with switch/case code
-        private const int ACTIVE_COLUMN = 0;
+        private const int START_COLUMN = 0; 
 
-        private const int DESTINATION_COLUMN = 4;
+        private const int ACTIVE_COLUMN = 1;
+
+        private const int UNIVERSE_COLUMN = 2;
 
         private const int SIZE_COLUMN = 3;
-
-        private const int START_COLUMN = 2;
-
-        private const int TTL_COLUMN = 5;
-
-        private const int UNIVERSE_COLUMN = 1;
 
         // plugin channel count as set by vixen
         private readonly SortedList<string, int> badIDs = new SortedList<string, int>();
@@ -64,15 +67,14 @@ namespace VixenModules.Output.E131
 
         private readonly SortedDictionary<string, string> nicNames = new SortedDictionary<string, string>();
 
-
+        private bool shownSortError = false;
         /// <summary>
         ///   Initializes a new instance of the <see cref = "SetupForm" /> class. 
         ///   Build some nic tables and initialize the component
         /// </summary>
         public SetupForm()
         {
-            // first build some sorted lists and dictionaries for the nics
-
+			
             // get all the nics
             var networkInterfaces = NetworkInterface.GetAllNetworkInterfaces();
             foreach (var networkInterface in networkInterfaces)
@@ -83,29 +85,63 @@ namespace VixenModules.Output.E131
                 }
 
                 // if not a tunnel
-                if (networkInterface.NetworkInterfaceType.CompareTo(NetworkInterfaceType.Tunnel) != 0)
+               if (networkInterface.NetworkInterfaceType != NetworkInterfaceType.Tunnel && networkInterface.NetworkInterfaceType != NetworkInterfaceType.Loopback && networkInterface.SupportsMulticast)
                 {
-                    // and supports multicast
-                    if (networkInterface.SupportsMulticast)
-                    {
-                        // then add it to multicasts table by name
-                        this.multicasts.Add(networkInterface.Name, 0);
+                    // then add it to multicasts table by name
+                    this.multicasts.Add(networkInterface.Name, 0);
 
-                        // add it to available nicIDs table
-                        this.nicIDs.Add(networkInterface.Id, networkInterface.Name);
+                    // add it to available nicIDs table
+                    this.nicIDs.Add(networkInterface.Id, networkInterface.Name);
 
-                        // add ot to available nicNames table
-                        this.nicNames.Add(networkInterface.Name, networkInterface.Id);
-                    }
+                    // add it to available nicNames table
+                    this.nicNames.Add(networkInterface.Name, networkInterface.Id);
                 }
             }
 
             // finally initialize the form
-            this.InitializeComponent();
-            this.SetDestinations();
+            InitializeComponent();
+			lblDestination.Font = new Font(SystemFonts.MessageBoxFont.FontFamily, 14.25F);
+            btnAddUniverse.Text = "";
+            btnAddUniverse.Image = Tools.GetIcon(Resources.add, 16);
+            btnDeleteUniverse.Text = "";
+            btnDeleteUniverse.Image = Tools.GetIcon(Resources.delete, 16);
+
+            btnAddUnicast.Text = "";
+            btnAddUnicast.Image = Tools.GetIcon(Resources.add, 16);
+            btnDeleteUnicast.Text = "";
+            btnDeleteUnicast.Image = Tools.GetIcon(Resources.delete, 16);
+			SetDestinations();
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			ThemeUpdateControls.UpdateControls(this, new List<Control>(new []{univDGVN}));
+			foreach (Control tab in tabControlEX1.TabPages)
+			{
+				tab.BackColor = ThemeColorTable.BackgroundColor;
+				tab.ForeColor = ThemeColorTable.ForeColor;
+			}
+			tabControlEX1.SelectedTabColor = ThemeColorTable.BackgroundColor;
+			tabControlEX1.TabColor = ThemeColorTable.BackgroundColor;
+	        tabControlEX1.SelectedTab = tabPageEX1;
+			univDGVN.EnableHeadersVisualStyles = false;
+			univDGVN.BackgroundColor = ThemeColorTable.BackgroundColor;
+			univDGVN.ForeColor = ThemeColorTable.ForeColor;
+	        univDGVN.DefaultCellStyle.BackColor = ThemeColorTable.BackgroundColor;
+	        univDGVN.DefaultCellStyle.ForeColor = ThemeColorTable.ForeColor;
+	        univDGVN.DefaultCellStyle.SelectionBackColor = ThemeColorTable.ListBoxHighLightColor;
+			univDGVN.DefaultCellStyle.SelectionForeColor = ThemeColorTable.ForeColor;
+			univDGVN.RowsDefaultCellStyle.BackColor = Color.Empty;
+			univDGVN.RowsDefaultCellStyle.ForeColor = Color.Empty;
+			univDGVN.ColumnHeadersDefaultCellStyle.BackColor = ThemeColorTable.BackgroundColor;
+			univDGVN.ColumnHeadersDefaultCellStyle.ForeColor = ThemeColorTable.ForeColor;
+	        univDGVN.RowHeadersDefaultCellStyle.BackColor = Color.Empty;
+	        univDGVN.RowHeadersDefaultCellStyle.ForeColor = Color.Empty;
+			univDGVN.RowHeadersDefaultCellStyle.SelectionForeColor = Color.Empty;
+			univDGVN.RowHeadersDefaultCellStyle.SelectionBackColor = Color.Empty;
+			autoPopulateStateUpdate();
 
         }
 
+		
         public int EventRepeatCount
         {
             get
@@ -140,6 +176,24 @@ namespace VixenModules.Output.E131
 			set { this.eventSuppressCountTextBox.Text = value.ToString(); }
 		}
 
+        public bool AutoPopulateStart
+        {
+            get { return !autoPopulateStart.Checked; }
+            set { autoPopulateStart.Checked = !value; autoPopulateStateUpdate(); }
+        }
+
+        public bool Blind
+        {
+            get { return chkBoxTransmitBlind.Checked; }
+            set { chkBoxTransmitBlind.Checked = value; }
+        }
+
+        public int Priority
+        {
+            get { return Convert.ToInt16(numericPriority.Value); }
+            set { numericPriority.Value = value; }
+        }
+
 		public int PluginChannelCount
         {
             set { this.pluginChannelCount = value; }
@@ -163,12 +217,21 @@ namespace VixenModules.Output.E131
 
             set { this.warningsCheckBox.Checked = value; }
         }
-        List<int> existingUniv = new List<int>();
+
         public bool UniverseAdd(
-            bool active, int universe, int start, int size, string unicast, string multicast, int ttl)
+            bool active, int universe, int start, int size)
+        {
+            // all set, add the row - convert int's to strings ourselves
+            this.univDGVN.Rows.Add(
+                new object[]
+					{start.ToString(), active, universe.ToString(), size.ToString()});
+            updateDgvnStartValues();
+            return true;
+        }
+
+        public void SetDestination(string multicast, string unicast)
         {
             string destination = null;
-            existingUniv.Add(universe);
 
             // if it is unicast we add the destination to the
             // drop down list if it isn't already there
@@ -178,9 +241,7 @@ namespace VixenModules.Output.E131
                 if (!E131OutputPlugin.unicasts.ContainsKey(unicast))
                 {
                     E131OutputPlugin.unicasts.Add(unicast, 0);
-                    this.destinationColumn.Items.Add("Unicast " + unicast);
                 }
-
                 destination = "Unicast " + unicast;
             }
 
@@ -195,25 +256,53 @@ namespace VixenModules.Output.E131
                 }
                 else
                 {
-                    if (!this.badIDs.ContainsKey(multicast))
-                    {
-                        this.badIDs.Add(multicast, 0);
-                        MessageBox.Show(
-                            "Warning - Interface IDs have changed. Please reselect all empty destinations.",
-                            "Network Interface Mapping",
-                            MessageBoxButtons.OK,
-                            MessageBoxIcon.Warning);
-                    }
+
+                    // then add it to multicasts table by name
+                    multicasts.Add("UNKNOWN", 0);
+
+                    // add it to available nicIDs table
+                    this.nicIDs.Add(multicast, "UNKNOWN");
+
+                    // add it to available nicNames table
+                    this.nicNames.Add("UNKNOWN", multicast);
+
+					//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+					MessageBoxForm.msgIcon = SystemIcons.Error; //this is used if you want to add a system icon to the message form.
+					var messageBox = new MessageBoxForm("The selected multicast interface was not found, be sure to verify your destination.", "", false, false);
+					messageBox.ShowDialog();
+
+                    destination = "Multicast UNKNOWN";
                 }
             }
 
-            // all set, add the row - convert int's to strings ourselves
-            this.univDGVN.Rows.Add(
-                new object[]
-					{
-						active, universe.ToString(), start.ToString(), size.ToString(), destination, ttl.ToString()
-					});
-            return true;
+            SetDestinations();
+
+            if (destination == null)
+            {
+                if (comboDestination.Items.Contains("Multicast Local Area Connection"))
+                    comboDestination.Text = "Multicast Local Area Connection";
+            }
+            else
+            {
+                comboDestination.Text = destination;
+            }
+        }
+
+        /// <summary>
+        /// Returns the selected destination as a Tuple <unicast, multicast>
+        /// </summary>
+        public Tuple<string, string> GetDestination()
+        {
+
+            if (comboDestination.Text.StartsWith("Unicast "))
+            {
+                return Tuple.Create(comboDestination.Text.Substring(8), null as string);
+            }
+            else if (comboDestination.Text.StartsWith("Multicast "))
+            {
+                return Tuple.Create(null as string, this.nicNames[comboDestination.Text.Substring(10)]);
+            }
+            return Tuple.Create(null as string, null as string);
         }
 
         public void UniverseClear()
@@ -226,10 +315,7 @@ namespace VixenModules.Output.E131
             ref bool active,
             ref int universe,
             ref int start,
-            ref int size,
-            ref string unicast,
-            ref string multicast,
-            ref int ttl)
+            ref int size)
         {
             var row = this.univDGVN.Rows[index];
 
@@ -251,37 +337,28 @@ namespace VixenModules.Output.E131
             universe = ((string)row.Cells[UNIVERSE_COLUMN].Value).TryParseInt32(1);
             start = ((string)row.Cells[START_COLUMN].Value).TryParseInt32(1);
             size = ((string)row.Cells[SIZE_COLUMN].Value).TryParseInt32(1);
-            ttl = ((string)row.Cells[TTL_COLUMN].Value).TryParseInt32(1);
-
-            // first set both unicast and multicast results to null
-            unicast = null;
-            multicast = null;
-
-            // then set the selected unicast/multicast destination
-            if (row.Cells[DESTINATION_COLUMN].Value != null)
-            {
-                var destination = (string)row.Cells[DESTINATION_COLUMN].Value;
-                if (destination.StartsWith("Unicast "))
-                {
-                    unicast = destination.Substring(8);
-                }
-                else if (destination.StartsWith("Multicast "))
-                {
-                    multicast = this.nicNames[destination.Substring(10)];
-                }
-            }
 
             return true;
         }
 
-        private void UnivDgvnDefaultValuesNeeded(object sender, DataGridViewRowEventArgs e)
+        /*private void UnivDgvnDefaultValuesNeeded(object sender, DataGridViewRowEventArgs e)
         {
             e.Row.Cells[ACTIVE_COLUMN].Value = false;
-            e.Row.Cells[UNIVERSE_COLUMN].Value = "1";
             e.Row.Cells[START_COLUMN].Value = "1";
+
+            int maxUniverse = 1;
+
+            //try to supply a more useful start value
+            foreach(DataGridViewRow r in univDGVN.Rows) {
+                if (r.Cells[UNIVERSE_COLUMN].Value != null)
+                    if (Convert.ToInt16(e.Row.Cells[UNIVERSE_COLUMN].Value.ToString()) > maxUniverse)
+                        maxUniverse = Convert.ToInt16(e.Row.Cells[UNIVERSE_COLUMN].Value.ToString());
+            }
+
+            e.Row.Cells[UNIVERSE_COLUMN].Value = maxUniverse;
+
             e.Row.Cells[SIZE_COLUMN].Value = "1";
-            e.Row.Cells[TTL_COLUMN].Value = "1";
-        }
+        }*/
 
         private void AddUnicastIp()
         {
@@ -297,50 +374,23 @@ namespace VixenModules.Output.E131
 
             if (unicastForm.ShowDialog() == DialogResult.OK)
             {
-                IPAddress ipAddress;
-                bool valid = IPAddress.TryParse(unicastForm.IpAddrText, out ipAddress);
 
-                if (valid)
+                var ipAddressText = unicastForm.IpAddrText;
+
+                if (E131OutputPlugin.unicasts.ContainsKey(ipAddressText))
                 {
-                    var ipBytes = ipAddress.GetAddressBytes();
-
-                    if (ipBytes[0] == 0 && ipBytes[1] == 0 && ipBytes[2] == 0 && ipBytes[3] == 0)
-                    {
-                        valid = false;
-                    }
-
-                    if (ipBytes[0] == 255 && ipBytes[1] == 255 && ipBytes[2] == 255 && ipBytes[3] == 255)
-                    {
-                        valid = false;
-                    }
-                }
-
-                if (!valid)
-                {
-                    MessageBox.Show(
-                        "Error - Invalid IP Address",
-                        "IP Address Validation",
-                        MessageBoxButtons.OK,
-                        MessageBoxIcon.Error);
+					//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+					MessageBoxForm.msgIcon = SystemIcons.Error; //this is used if you want to add a system icon to the message form.
+					var messageBox = new MessageBoxForm("Error - Duplicate IP Address",
+						"IP Address Validation", false, false);
+					messageBox.ShowDialog();
                 }
                 else
                 {
-                    var ipAddressText = ipAddress.ToString();
-
-                    if (E131OutputPlugin.unicasts.ContainsKey(ipAddressText))
-                    {
-                        MessageBox.Show(
-                            "Error - Duplicate IP Address",
-                            "IP Address Validation",
-                            MessageBoxButtons.OK,
-                            MessageBoxIcon.Error);
-                    }
-                    else
-                    {
-                        E131OutputPlugin.unicasts.Add(ipAddressText, 0);
-                        this.SetDestinations();
-                    }
+                    E131OutputPlugin.unicasts.Add(ipAddressText, 0);
+                    this.SetDestinations();
                 }
+                comboDestination.SelectedItem = "Unicast " + ipAddressText;
             }
         }
 
@@ -435,18 +485,15 @@ namespace VixenModules.Output.E131
                 {
                     if ((bool)row.Cells[ACTIVE_COLUMN].Value)
                     {
-                        if (row.Cells[DESTINATION_COLUMN].Value != null)
+                        var universeDestination = (string)row.Cells[UNIVERSE_COLUMN].Value + ":"
+                                                    + comboDestination.Text;
+                        if (universeDestinations.ContainsKey(universeDestination))
                         {
-                            var universeDestination = (string)row.Cells[UNIVERSE_COLUMN].Value + ":"
-                                                      + (string)row.Cells[DESTINATION_COLUMN].Value;
-                            if (universeDestinations.ContainsKey(universeDestination))
-                            {
-                                universeDestinations[universeDestination] = 1;
-                            }
-                            else
-                            {
-                                universeDestinations.Add(universeDestination, 0);
-                            }
+                            universeDestinations[universeDestination] = 1;
+                        }
+                        else
+                        {
+                            universeDestinations.Add(universeDestination, 0);
                         }
                     }
                 }
@@ -465,8 +512,12 @@ namespace VixenModules.Output.E131
                 {
                     if ((bool)row.Cells[ACTIVE_COLUMN].Value)
                     {
-                        // test for null destinations
-                        if (row.Cells[DESTINATION_COLUMN].Value == null)
+
+                        // otherwise, test for duplicate universe/destination combos
+                        var universeDestination = (string)row.Cells[UNIVERSE_COLUMN].Value + ":"
+                                                    + comboDestination.Text;
+
+                        if (universeDestinations[universeDestination] != 0)
                         {
                             if (!valid)
                             {
@@ -475,28 +526,10 @@ namespace VixenModules.Output.E131
 
                             errorList.Append("Row ");
                             errorList.Append((row.Index + 1).ToString());
-                            errorList.Append(": No Destination Selected");
+                            errorList.Append(": Duplicate Universe/Destination Combination");
                             valid = false;
                         }
-                        else
-                        {
-                            // otherwise, test for duplicate universe/destination combos
-                            var universeDestination = (string)row.Cells[UNIVERSE_COLUMN].Value + ":"
-                                                      + (string)row.Cells[DESTINATION_COLUMN].Value;
-
-                            if (universeDestinations[universeDestination] != 0)
-                            {
-                                if (!valid)
-                                {
-                                    errorList.Append("\r\n");
-                                }
-
-                                errorList.Append("Row ");
-                                errorList.Append((row.Index + 1).ToString());
-                                errorList.Append(": Duplicate Universe/Destination Combination");
-                                valid = false;
-                            }
-                        }
+                        
 
                         // only test for range if more than 0 channels, otherwise wait for runtime
                         if (this.pluginChannelCount > 0)
@@ -531,19 +564,6 @@ namespace VixenModules.Output.E131
                             }
                         }
 
-                        // now test for ttl value
-                        if (((string)row.Cells[TTL_COLUMN].Value).TryParseInt32(1) == 0)
-                        {
-                            if (!valid)
-                            {
-                                errorList.Append("\r\n");
-                            }
-
-                            errorList.Append("Row ");
-                            errorList.Append((row.Index + 1).ToString());
-                            errorList.Append(": Warning - Zero TTL");
-                            valid = false;
-                        }
                     }
                 }
             }
@@ -609,18 +629,19 @@ namespace VixenModules.Output.E131
             }
         }
 
+        
         private void SetDestinations()
         {
-            this.destinationColumn.Items.Clear();
+            comboDestination.Items.Clear();
 
             foreach (var destination in this.multicasts.Keys)
             {
-                this.destinationColumn.Items.Add("Multicast " + destination);
-            }
+                comboDestination.Items.Add("Multicast " + destination);
+             }
 
             foreach (var ipAddr in E131OutputPlugin.unicasts.Keys)
             {
-                this.destinationColumn.Items.Add("Unicast " + ipAddr);
+                comboDestination.Items.Add("Unicast " + ipAddr);
             }
         }
 
@@ -634,10 +655,10 @@ namespace VixenModules.Output.E131
 
         private void UnivDgvnCellEnter(object sender, DataGridViewCellEventArgs e)
         {
-            if (e.ColumnIndex == DESTINATION_COLUMN)
+            /*if (e.ColumnIndex == DESTINATION_COLUMN)
             {
                 this.univDGVN.BeginEdit(false);
-            }
+            }*/
         }
 
         // -------------------------------------------------------------
@@ -648,29 +669,29 @@ namespace VixenModules.Output.E131
             // if it's the headers - sort 'em
             if (e.RowIndex == -1)
             {
-                if (0 < e.ColumnIndex && e.ColumnIndex < 5)
+                if (!autoPopulateStart.Checked)
                 {
-                    var lsd = ListSortDirection.Ascending;
-
-                    if (e.Button == MouseButtons.Right)
-                    {
-                        lsd = ListSortDirection.Descending;
-                    }
-
-                    this.univDGVN.Sort(this.univDGVN.Columns[e.ColumnIndex], lsd);
-                }
-            }
-
-                // if it's the rows - handle specials
-            else
-            {
-                // if it's the right button
-                if (e.Button == MouseButtons.Right)
+	                if (!shownSortError)
+	                {
+						//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+						MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+						var messageBox = new MessageBoxForm("Sorting is not available while Vixen manages the start values.",
+							"", false, false);
+						messageBox.ShowDialog();
+	                }
+                    shownSortError = true;
+                } else
                 {
-                    // if it's the destination column - they want to add a unicast ip
-                    if (e.ColumnIndex == DESTINATION_COLUMN)
+                    if (e.ColumnIndex < 5)
                     {
-                        this.AddUnicastIp();
+                        var lsd = ListSortDirection.Ascending;
+
+                        if (e.Button == MouseButtons.Right)
+                        {
+                            lsd = ListSortDirection.Descending;
+                        }
+
+                        this.univDGVN.Sort(this.univDGVN.Columns[e.ColumnIndex], lsd);
                     }
                 }
             }
@@ -679,6 +700,27 @@ namespace VixenModules.Output.E131
         private void UnivDgvnCellMouseEnter(object sender, DataGridViewCellEventArgs e)
         {
             this.univDGVNCellEventArgs = e;
+        }
+
+        private void updateDgvnStartValues()
+        {
+            int nextStart = 0;
+            if (AutoPopulateStart)
+            {
+                foreach (DataGridViewRow r in univDGVN.Rows)
+                {
+                    if (r.Index == 0)
+                    {
+                        r.Cells[START_COLUMN].Value = "1";
+                        nextStart = 1 + Convert.ToInt32(r.Cells[SIZE_COLUMN].Value as string);
+                    }
+                    else
+                    {
+                        r.Cells[START_COLUMN].Value = nextStart.ToString();
+                        nextStart += Convert.ToInt32(r.Cells[SIZE_COLUMN].Value as string);
+                    }
+                }
+            }
         }
 
         private void UnivDgvnCellValidating(object sender, DataGridViewCellValidatingEventArgs e)
@@ -711,6 +753,7 @@ namespace VixenModules.Output.E131
                     {
                         this.univDGVN.Rows[e.RowIndex].ErrorText = "Universe must be between 1 and 64000 inclusive";
                     }
+
 
                     break;
 
@@ -747,45 +790,16 @@ namespace VixenModules.Output.E131
                     }
 
                     break;
-
-                case TTL_COLUMN:
-                    if (cellValueText == null)
-                    {
-                        e.Cancel = true;
-                    }
-                    else if (cellValueInt < 0 || 99 < cellValueInt)
-                    {
-                        e.Cancel = true;
-                    }
-
-                    if (e.Cancel)
-                    {
-                        this.univDGVN.Rows[e.RowIndex].ErrorText = "TTL must be between 0 and 99 inclusive";
-                    }
-
-                    break;
             }
 
             if (e.Cancel)
             {
-                MessageBox.Show(
-                    this.univDGVN.Rows[e.RowIndex].ErrorText,
-                    "Cell Validation",
-                    MessageBoxButtons.OK,
-                    MessageBoxIcon.Exclamation);
-            }
-        }
-
-        private void UnivDgvnDeleteRow(object sender, EventArgs e)
-        {
-            if (this.univDGVNCellEventArgs != null)
-            {
-                var row = this.univDGVN.Rows[this.univDGVNCellEventArgs.RowIndex];
-
-                if (!row.IsNewRow)
-                {
-                    this.univDGVN.Rows.RemoveAt(row.Index);
-                }
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Exclamation; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm(
+					this.univDGVN.Rows[e.RowIndex].ErrorText,
+					"Cell Validation", false, false);
+				messageBox.ShowDialog();
             }
         }
 
@@ -793,37 +807,13 @@ namespace VixenModules.Output.E131
         {
             var columnIndex = univDGVN.CurrentCell.ColumnIndex;
 
-            if (columnIndex == UNIVERSE_COLUMN || columnIndex == START_COLUMN || columnIndex == SIZE_COLUMN
-                || columnIndex == TTL_COLUMN)
+            if (columnIndex == UNIVERSE_COLUMN || columnIndex == START_COLUMN || columnIndex == SIZE_COLUMN)
             {
                 // first remove the event handler (if previously added)
                 e.Control.KeyPress -= this.NumTextBoxKeyPress;
 
                 // now add our event handler
                 e.Control.KeyPress += this.NumTextBoxKeyPress;
-            }
-
-            if (columnIndex == DESTINATION_COLUMN)
-            {
-                var control = e.Control as DataGridViewComboBoxEditingControl;
-
-                if (control != null)
-                {
-                    if (this.destinationToolTip == null)
-                    {
-                        this.destinationToolTip = new ToolTip();
-                    }
-
-                    this.destinationToolTip.SetToolTip(e.Control, "RightClick to add a new Unicast IP Address");
-
-                    if (this.destinationContextMenuStrip == null)
-                    {
-                        this.destinationContextMenuStrip = new ContextMenuStrip();
-                        this.destinationContextMenuStrip.Opening += this.DestinationContextMenuStripOpening;
-                    }
-
-                    control.ContextMenuStrip = this.destinationContextMenuStrip;
-                }
             }
         }
 
@@ -835,7 +825,7 @@ namespace VixenModules.Output.E131
 
                 if (!row.IsNewRow)
                 {
-                    this.univDGVN.Rows.Insert(row.Index, new object[] { false, "1", "1", "1", null, "1" });
+                    this.univDGVN.Rows.Insert(row.Index, new object[] { "1", false, "1", "1", null, "1" });
                 }
             }
         }
@@ -876,51 +866,269 @@ namespace VixenModules.Output.E131
             }
         }
 
-        private void UnivDgvnInsertRow(object sender, DataGridViewRowEventArgs e)
-        {
-        }
-
-        private void UnivDgvnDeleteRow(object sender, DataGridViewRowEventArgs e)
-        {
-        }
-
-        private void univDGVN_CellContentClick(object sender, DataGridViewCellEventArgs e)
-        {
-        }
-
-        private void SetupForm_Load(object sender, EventArgs e)
-        {
-        }
-
-
         private void SetupForm_FormClosing(object sender, FormClosingEventArgs e)
         {
+
             if (this.DialogResult == System.Windows.Forms.DialogResult.OK)
-                for (int i = 0; i < UniverseCount; i++)
-                {
-                    bool active = true;
-                    int universe = 0;
-                    int start = 0;
-                    int size = 0;
-                    string unicast = string.Empty;
-                    string multicast = string.Empty;
-                    int ttl = 0;
+            {
+                bool overlapWarning = false;
 
-                    if (UniverseGet(
-                        i, ref active, ref universe, ref start, ref size, ref unicast, ref multicast, ref ttl))
+                //Validate that a given Vixen input channel doesn't go to multiple sACN output channels
+                //Technically nothing bad will happen, but the user should be aware as it is most likely an accident.
+                foreach(DataGridViewRow r1 in univDGVN.Rows){
+                    foreach (DataGridViewRow r2 in univDGVN.Rows)
                     {
-                        if (!existingUniv.Contains(universe))
-                            if (E131OutputPlugin.EmployedUniverses.Contains(universe))
-                            {
-                                MessageBox.Show(string.Format("Universe {0} already exists on another controller.  Please configure a different universe to prevent hardware errors.  Multicast universes should only be configured on a single Vixen controller instance.  Unicast universes should all be unique.", universe), "Existing Universe", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
-                                e.Cancel = true;
-                                return;
-                            }
+                        if (r1 != r2)
+                        {
+                            int r1LowerBound = ((string)r1.Cells[START_COLUMN].Value).TryParseInt32(0);
+                            int r1UpperBound  = (((string)r1.Cells[START_COLUMN].Value).TryParseInt32(0) + ((string)r1.Cells[SIZE_COLUMN].Value).TryParseInt32(0)-1);
+                            int r2LowerBound = ((string)r2.Cells[START_COLUMN].Value).TryParseInt32(0);
+                            int r2UpperBound  = (((string)r2.Cells[START_COLUMN].Value).TryParseInt32(0) + ((string)r2.Cells[SIZE_COLUMN].Value).TryParseInt32(0)-1);
 
+                            if ((r1LowerBound >= r2LowerBound && r1LowerBound <= r2UpperBound) || (r1UpperBound >= r2LowerBound && r1UpperBound <= r2UpperBound))
+                            {
+
+								var messageBox = new MessageBoxForm("The start values seem to be setup in an unusual way. You are sending identical lighting values to multiple sACN outputs. The start value column refers to where a given universe starts reading values in from the list of output channel data from Vixen. For example, setting Universe 1's start value to 5 will map Channel 1 in Universe 1 to output channel #5 in the Vixen controller setup. Would you like to review your settings?", "Warning", MessageBoxButtons.OKCancel, SystemIcons.Warning);
+								messageBox.ShowDialog();
+								if (messageBox.DialogResult == DialogResult.OK)
+								{
+                                    e.Cancel = false;
+                                    return;
+                                }
+                                overlapWarning = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (overlapWarning) break;
+                }
+
+                var destination = new Tuple<string, string>(null, null);
+                destination = GetDestination(); //Item1 Unicast, Item2 Multicast
+
+                //prevent duplicates in this plugin instance
+                foreach (DataGridViewRow r1 in univDGVN.Rows)
+                {
+                    int univ = ((string)r1.Cells[UNIVERSE_COLUMN].Value).TryParseInt32(1);
+                    foreach(DataGridViewRow r2 in univDGVN.Rows){
+                        if(r1 != r2 && univ == ((string)r2.Cells[UNIVERSE_COLUMN].Value).TryParseInt32(1)){
+							//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+							MessageBoxForm.msgIcon = SystemIcons.Error; //this is used if you want to add a system icon to the message form.
+							var messageBox = new MessageBoxForm("Universe numbers must be unique.", "Error", false, false);
+							messageBox.ShowDialog();
+                            e.Cancel = true;
+                            return;
+                        }
                     }
                 }
 
+                //Validate that the same universe isn't being broadcasted to the same devices from multiple
+                //instances of the plugin
+                foreach (E131OutputPlugin p in E131OutputPlugin.PluginInstances)
+                {
+                    if (p.isSetupOpen) //don't validate against this instance of the plugin
+                        continue;
+
+                    //Conditions which we need to validate for overlap
+                    if(
+                        !(((p.ModuleData as E131ModuleDataModel).Unicast != null && destination.Item1 != null && (p.ModuleData as E131ModuleDataModel).Unicast != destination.Item1) //unicasting to different IPs
+                        || ((p.ModuleData as E131ModuleDataModel).Multicast != null && destination.Item2 != null && (p.ModuleData as E131ModuleDataModel).Multicast != destination.Item2))) //Multicasting to different networks
+                    {
+                        int[] usedUniverses = (p.ModuleData as E131ModuleDataModel).Universes.Select(x => x.Universe).ToArray();
+
+                        for (int i = 0; i < UniverseCount; i++)
+                        {
+                            bool active = true;
+                            int universe = 0;
+                            int start = 0;
+                            int size = 0;
+
+                            if (UniverseGet(
+                                i, ref active, ref universe, ref start, ref size))
+                            {
+                                if (usedUniverses.Contains(universe))
+                                {
+									//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+									MessageBoxForm.msgIcon = SystemIcons.Exclamation; //this is used if you want to add a system icon to the message form.
+									var messageBox = new MessageBoxForm(string.Format("Universe {0} already exists on another controller transmitting to the same device or network. Please configure a different universe to prevent hardware errors.", universe), "Existing Universe", false, false);
+									messageBox.ShowDialog();
+                                    e.Cancel = true;
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
 		}
 
+        private void autoPopulateStart_CheckedChanged(object sender, EventArgs e)
+        {
+            autoPopulateStateUpdate();
+        }
+
+        private void univDGVN_CellValidated(object sender, DataGridViewCellEventArgs e)
+        {
+            switch (e.ColumnIndex)
+            {
+                case START_COLUMN:
+                case SIZE_COLUMN:
+                    updateDgvnStartValues();
+                    break;
+            }
+        }
+
+        private void autoPopulateStateUpdate()
+        {
+            univDGVN.Columns[START_COLUMN].ReadOnly = !autoPopulateStart.Checked;
+            foreach (DataGridViewColumn c in univDGVN.Columns)
+                if (!autoPopulateStart.Checked)
+                    c.ToolTipText = "";
+                else
+                    c.ToolTipText = "Sort (LeftClick = Ascending, RightClick = Descending)";
+
+            if (!autoPopulateStart.Checked)
+            {
+	            var style = univDGVN.Columns[START_COLUMN].DefaultCellStyle;
+				style.BackColor = ThemeColorTable.ListBoxHighLightColor;
+				style.Font = new Font(univDGVN.Columns[START_COLUMN].DefaultCellStyle.Font ?? SystemFonts.DefaultFont, FontStyle.Italic);
+	            univDGVN.Columns[START_COLUMN].DefaultCellStyle = style;
+            }
+            else
+            {
+				var style = univDGVN.Columns[START_COLUMN].DefaultCellStyle;
+				style.BackColor = ThemeColorTable.BackgroundColor;
+                style.Font = new Font(univDGVN.Columns[START_COLUMN].DefaultCellStyle.Font ?? SystemFonts.DefaultFont, FontStyle.Regular);
+				univDGVN.Columns[START_COLUMN].DefaultCellStyle = style;
+            }
+
+            updateDgvnStartValues();
+        }
+
+        private void btnAdd_Click(object sender, EventArgs e)
+        {
+            int maxUniverse = 0;
+
+            //try to supply a more useful start value
+            foreach (DataGridViewRow r in univDGVN.Rows)
+            {
+                if (r.Cells[UNIVERSE_COLUMN].Value != null)
+                    if (Convert.ToInt16(r.Cells[UNIVERSE_COLUMN].Value.ToString()) > maxUniverse)
+                        maxUniverse = Convert.ToInt16(r.Cells[UNIVERSE_COLUMN].Value.ToString());
+            }
+            maxUniverse++;
+            this.univDGVN.Rows.Add(
+            new object[] { 0, true, maxUniverse.ToString(), "510"});
+            updateDgvnStartValues();
+
+            foreach (DataGridViewRow r in univDGVN.Rows)
+                r.Selected = false;
+            univDGVN.Rows[univDGVN.Rows.Count-1].Selected = true;
+        }
+
+        private void UnivDgvnDeletedRow(object sender, DataGridViewRowEventArgs e)
+        {
+            updateDgvnStartValues();
+        }
+
+        private void btnDelete_Click(object sender, EventArgs e)
+        {
+            List<DataGridViewRow> toDelete = new List<DataGridViewRow>();
+            foreach (DataGridViewRow r in univDGVN.Rows)
+                foreach (DataGridViewCell c in r.Cells)
+                    if (c.Selected)
+                    {
+                        toDelete.Add(r);
+                        break;
+                    }
+
+            foreach (DataGridViewRow r in toDelete)
+                univDGVN.Rows.Remove(r);
+            updateDgvnStartValues();
+        }
+
+        private void UnivDgvnInsertRow(object sender, DataGridViewRowEventArgs e)
+        {
+
+        }
+
+        private void univDGVN_KeyPress(object sender, KeyPressEventArgs e)
+        {
+            if (e.KeyChar == (Char)Keys.Delete)
+                btnDelete_Click(null, null);
+        }
+
+        private void univDGVN_KeyUp(object sender, KeyEventArgs e)
+        {
+            if (e.KeyCode == Keys.Delete)
+                btnDelete_Click(null, null);
+        }
+
+        private void btnAddUnicast_Click_1(object sender, EventArgs e)
+        {
+            AddUnicastIp();
+        }
+
+        private void btnRemoveUnicast_Click(object sender, EventArgs e)
+        {
+            if (comboDestination.SelectedItem.ToString().StartsWith("Multicast"))
+            {
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Information; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm("Multicast destinations cannot be removed.", "Streaming ACN (E1.31)", false, false);
+				messageBox.ShowDialog();
+                return;
+            }
+
+            //Validate that the unicast destination isn't in use by another instance of the plugin
+
+            var destination = new Tuple<string, string>(null, null);
+            destination = GetDestination(); //Item1 Unicast, Item2 Multicast
+
+            foreach (E131OutputPlugin p in E131OutputPlugin.PluginInstances)
+            {
+                if (p.isSetupOpen) //don't validate against this instance of the plugin
+                    continue;
+
+                if ((p.ModuleData as E131ModuleDataModel).Unicast == destination.Item1)
+                {
+					//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+					MessageBoxForm.msgIcon = SystemIcons.Information; //this is used if you want to add a system icon to the message form.
+					var messageBox = new MessageBoxForm("This destination is in use by another instance of the plugin and cannot be removed.", "Streaming ACN (E1.31)", false, false);
+					messageBox.ShowDialog();
+                    return;
+                }
+            }
+
+            E131OutputPlugin.unicasts.Remove(destination.Item1);
+            SetDestinations();
+            comboDestination.SelectedIndex = 0;
+        }
+
+        private void comboDestination_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (comboDestination.SelectedItem.ToString().StartsWith("Multicast"))
+                btnDeleteUnicast.Enabled = false;
+            else
+                btnDeleteUnicast.Enabled = true;
+        }
+
+		private void buttonBackground_MouseHover(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImageHover;
+		}
+
+		private void buttonBackground_MouseLeave(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImage;
+
+		}
+
+		private void comboBox_DrawItem(object sender, DrawItemEventArgs e)
+		{
+			ThemeComboBoxRenderer.DrawItem(sender, e);
+		}
     }
 }

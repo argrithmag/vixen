@@ -6,6 +6,9 @@ using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
+using Common.Controls;
+using Common.Controls.Theme;
+using Common.Resources.Properties;
 using NLog;
 using Vixen.Rule;
 using Vixen.Services;
@@ -14,7 +17,7 @@ using Vixen.Module.App;
 
 namespace VixenApplication.Setup.ElementTemplates
 {
-    public partial class LipSync : Form, IElementTemplate
+	public partial class LipSync : BaseForm, IElementTemplate
     {
         private static Logger Logging = LogManager.GetCurrentClassLogger();
         private static string[] templateStrings = { "Outline", "Eyes Open", "Eyes Closed", "Mouth Top", "Mouth Middle", "Mouth Bottom", "Mouth Narrow", "Mouth O" };
@@ -23,7 +26,12 @@ namespace VixenApplication.Setup.ElementTemplates
 
         public LipSync()
         {
-            InitializeComponent();
+			InitializeComponent();
+			Icon = Resources.Icon_Vixen3;
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			ThemeUpdateControls.UpdateControls(this);
+			Icon = Resources.Icon_Vixen3;
             treename = "LipSync";
         }
 
@@ -76,5 +84,18 @@ namespace VixenApplication.Setup.ElementTemplates
         {
             treename = textBoxTreeName.Text;
         }
+
+		private void buttonBackground_MouseHover(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImageHover;
+		}
+
+		private void buttonBackground_MouseLeave(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImage;
+
+		}
     }
 }

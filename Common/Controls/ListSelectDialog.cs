@@ -6,10 +6,11 @@ using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
+using Common.Controls.Theme;
 
 namespace Common.Controls
 {
-	public partial class ListSelectDialog : Form
+	public partial class ListSelectDialog : BaseForm
 	{
 		private string _formTitle;
 		private List<KeyValuePair<string, object>> _items;
@@ -19,6 +20,9 @@ namespace Common.Controls
 			_formTitle = formTitle;
 			_items = items;
 			InitializeComponent();
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			ThemeUpdateControls.UpdateControls(this);
 		}
 
 		public Object SelectedItem
@@ -92,6 +96,19 @@ namespace Common.Controls
 				this.DialogResult = DialogResult.Cancel;
 				this.Close();
 			}
+		}
+
+		private void buttonBackground_MouseHover(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.Properties.Resources.ButtonBackgroundImageHover;
+		}
+
+		private void buttonBackground_MouseLeave(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.Properties.Resources.ButtonBackgroundImage;
+
 		}
 	}
 }

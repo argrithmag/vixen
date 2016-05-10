@@ -1,16 +1,22 @@
 ﻿using System;
 using System.Linq;
 using System.Windows.Forms;
+using Common.Controls;
+using Common.Controls.Theme;
+using Common.Resources.Properties;
 using Vixen.Sys;
 
 namespace VixenModules.App.InstrumentationPanel
 {
-	public partial class InstrumentationForm : Form
+	public partial class InstrumentationForm : BaseForm
 	{
 		public InstrumentationForm()
 		{
 			InitializeComponent();
-			Icon = Common.Resources.Properties.Resources.Icon_Vixen3;
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			ThemeUpdateControls.UpdateControls(this);
+			Icon = Resources.Icon_Vixen3;
 		}
 
 		private void InstrumentationForm_Load(object sender, EventArgs e)
@@ -36,6 +42,18 @@ namespace VixenModules.App.InstrumentationPanel
 				instrumentationValue.Reset();	
 			}
 			
+		}
+		private void buttonBackground_MouseHover(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImageHover;
+		}
+
+		private void buttonBackground_MouseLeave(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImage;
+
 		}
 	}
 }

@@ -6,18 +6,22 @@ using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
+using Common.Controls.Theme;
 using Common.Resources.Properties;
 using Common.Controls;
 
 namespace VixenApplication
 {
-	public partial class SelectProfile : Form
+	public partial class SelectProfile : BaseForm
 	{
 		private string _dataFolder = string.Empty;
 
 		public SelectProfile()
 		{
 			InitializeComponent();
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			ThemeUpdateControls.UpdateControls(this);
 			Icon = Resources.Icon_Vixen3;
 		}
 
@@ -26,6 +30,8 @@ namespace VixenApplication
 			get { return _dataFolder; }
 			set { _dataFolder = value; }
 		}
+
+		public string ProfileName { get; set; }
 
 		private void SelectProfile_Load(object sender, EventArgs e)
 		{
@@ -57,6 +63,7 @@ namespace VixenApplication
 			if (listBoxProfiles.SelectedIndex >= 0) {
 				ProfileItem item = listBoxProfiles.SelectedItem as ProfileItem;
 				DataFolder = item.DataFolder;
+				ProfileName = item.Name;
 				DialogResult = System.Windows.Forms.DialogResult.OK;
 				Close();
 			}
@@ -73,5 +80,18 @@ namespace VixenApplication
             if (f.ShowDialog() == System.Windows.Forms.DialogResult.OK)
                 PopulateProfileList();
         }
+
+		private void buttonBackground_MouseHover(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImageHover;
+		}
+
+		private void buttonBackground_MouseLeave(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImage;
+
+		}
 	}
 }

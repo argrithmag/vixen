@@ -3,11 +3,13 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing;
 using System.Data;
+using System.Drawing.Text;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
 using System.Drawing.Drawing2D;
 using System.Diagnostics;
+using Common.Controls.Theme;
 
 namespace Common.Controls.Timeline
 {
@@ -65,20 +67,26 @@ namespace Common.Controls.Timeline
 				// (ie. Drawing coordinates take into account where we start at in time)
 				e.Graphics.TranslateTransform(-timeToPixels(VisibleTimeStart), 0);
 
-				drawTicks(e.Graphics, MajorTick, 2, 0.5);
-				drawTicks(e.Graphics, MinorTick, 1, 0.25);
+				drawTicks(e.Graphics, MajorTick, 2, 0.4);
+				drawTicks(e.Graphics, MinorTick, 1, 0.20);
 				drawTimes(e.Graphics);
 
-				using (Pen p = new Pen(Color.Black, 2)) {
+				using (Pen p = new Pen(Color.Black, 2))
+				{
 					e.Graphics.DrawLine(p, 0, Height - 1, timeToPixels(TotalTime), Height - 1);
 				}
 
 				drawPlaybackIndicators(e.Graphics);
 
 				_drawMarks(e.Graphics);
+				
 			}
 			catch (Exception ex) {
-				MessageBox.Show("Exception in Timeline.Ruler.OnPaint():\n\n\t" + ex.Message + "\n\nBacktrace:\n\n\t" + ex.StackTrace);
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Error; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm("Exception in Timeline.Ruler.OnPaint():\n\n\t" + ex.Message + "\n\nBacktrace:\n\n\t" + ex.StackTrace,
+					@"Error", false, false);
+				messageBox.ShowDialog();
 			}
 		}
 
@@ -99,6 +107,8 @@ namespace Common.Controls.Timeline
 				graphics.DrawLine(p, x, (Single) (Height*(1.0 - height)), x, Height);
 			}
 		}
+
+		private string markTime;
 
 		private void drawTimes(Graphics graphics)
 		{
@@ -130,10 +140,11 @@ namespace Common.Controls.Timeline
 
 				// if drawing the string wouldn't overlap the last, then draw it
 				if (lastPixel + minPxBetweenTimeLabels + posOffset < curPixelCentre) {
-					graphics.DrawString(timeStr, m_font, m_textBrush, curPixelCentre - posOffset, (Height/4) - (stringSize.Height/2));
+					graphics.DrawString(timeStr, m_font, m_textBrush, curPixelCentre - posOffset, ((Height/4) - (stringSize.Height/2)) + 9);
 					lastPixel = (int) (curPixelCentre + posOffset);
 				}
 			}
+			
 		}
 
 		private const int ArrowBase = 16;
@@ -225,7 +236,7 @@ namespace Common.Controls.Timeline
 
 			if (m_font != null)
 				m_font.Dispose();
-			m_font = new Font("Arial", desiredPixelHeight, GraphicsUnit.Pixel);
+			m_font = new Font(Font.FontFamily, desiredPixelHeight, GraphicsUnit.Pixel);
 
 			if (m_textBrush != null)
 				m_textBrush.Dispose();
@@ -405,7 +416,8 @@ namespace Common.Controls.Timeline
 			Normal,
 			DragWait,
 			Dragging,
-			DraggingMark
+			DraggingMark,
+			ResizeRuler
 		}
 
 		private MouseState m_mouseState = MouseState.Normal;
@@ -434,6 +446,8 @@ namespace Common.Controls.Timeline
 				}
 				m_mouseState = MouseState.DraggingMark;
 			}
+			else if (Cursor == Cursors.HSplit)
+				m_mouseState = MouseState.ResizeRuler;
 			else
 			{
 				ClearSelectedMarks();
@@ -444,6 +458,7 @@ namespace Common.Controls.Timeline
 		protected override void OnMouseMove(MouseEventArgs e)
 		{
 			base.OnMouseMove(e);
+
 			if (m_button == System.Windows.Forms.MouseButtons.Left)
 			{
 				switch (m_mouseState)
@@ -480,7 +495,34 @@ namespace Common.Controls.Timeline
 						PlaybackEndTime = pixelsToTime(end) + VisibleTimeStart;
 						return;
 					case MouseState.DraggingMark:
-						Invalidate();
+
+						if (Convert.ToInt16(m_mark.Minutes) >= 10)
+						{
+							markTime = string.Format("{0:mm\\:ss\\.fff}", m_mark);
+						}
+						else if (Convert.ToInt16(m_mark.Minutes) >= 1)
+						{
+							markTime = string.Format("{0:m\\:ss\\.fff}", m_mark);
+						}
+						else if (Convert.ToInt16(m_mark.Seconds) >= 10)
+						{
+							markTime = string.Format("{0:ss\\.fff}", m_mark);
+						}
+						else if (Convert.ToInt16(m_mark.Seconds) <= 9)
+						{
+							markTime = string.Format("{0:s\\.fff}", m_mark);
+						}
+
+						OnMarkMoved(new MarkMovedEventArgs(m_mark, pixelsToTime(e.X) + VisibleTimeStart, m_markDetails));
+						Refresh();
+						m_mark = pixelsToTime(e.X) + VisibleTimeStart;
+						OnSelectedMarkMove(new SelectedMarkMoveEventArgs(true, m_mark));
+						
+						break;
+					case MouseState.ResizeRuler:
+						//Adjusts Ruler Height
+						if (e.Location.Y > 40)
+							Height = e.Location.Y + 1;
 						break;
 					default:
 						throw new Exception("Invalid MouseState. WTF?!");
@@ -492,11 +534,28 @@ namespace Common.Controls.Timeline
 				if (PointTimeToMark(pixelsToTime(e.X) + VisibleTimeStart) != TimeSpan.Zero)
 				{
 					Cursor = Cursors.VSplit;
+					OnSelectedMarkMove(new SelectedMarkMoveEventArgs(true, PointTimeToMark(pixelsToTime(e.X) + VisibleTimeStart)));
+				}
+				else if (e.Location.Y <= Height - 1 && e.Location.Y >= Height - 6)
+				{
+					Cursor = Cursors.HSplit;
 				}
 				else
 				{
 					Cursor = Cursors.Hand;
+					OnSelectedMarkMove(new SelectedMarkMoveEventArgs(false, TimeSpan.Zero));
 				}
+			}
+		}
+
+		protected override void OnMouseDoubleClick(MouseEventArgs e)
+		{
+			base.OnMouseDoubleClick(e);
+
+			//Resets Ruler Height to default value of 50 when you double click the HSplit
+			if (Cursor == Cursors.HSplit)
+			{
+				Height = 50;
 			}
 		}
 
@@ -543,8 +602,11 @@ namespace Common.Controls.Timeline
 								{
 									ClearSelectedMarks();
 									OnMarkMoved(new MarkMovedEventArgs(m_mark, pixelsToTime(e.X) + VisibleTimeStart, m_markDetails));
+									OnSelectedMarkMove(new SelectedMarkMoveEventArgs(false, TimeSpan.Zero));
 								}
 							}
+							break;
+						case MouseState.ResizeRuler:
 							break;
 						default:
 							throw new Exception("Invalid MouseState. WTF?!");
@@ -558,8 +620,10 @@ namespace Common.Controls.Timeline
 						// See if we got a right-click on top of a mark.
 						if (e.X == m_mouseDownX)
 						{
-							ContextMenu c = new ContextMenu();
-							c.MenuItems.Add("&Delete Mark", new EventHandler(DeleteMark_Click));
+							ContextMenuStrip c = new ContextMenuStrip();
+							c.Renderer = new ThemeToolStripRenderer();
+							c.Items.Add("&Delete Selected Marks");
+							c.Click += DeleteMark_Click;
 							c.Show(this, new Point(e.X, e.Y));
 						}
 					}
@@ -598,11 +662,7 @@ namespace Common.Controls.Timeline
 
 		void DeleteMark_Click(object sender, EventArgs e)
 		{
-			MenuItem mi = sender as MenuItem;
-			if (mi != null)
-			{
-				DeleteSelectedMarks();
-			}
+			DeleteSelectedMarks();
 		}
 
 		public void DeleteSelectedMarks()
@@ -611,6 +671,7 @@ namespace Common.Controls.Timeline
 			{
 				OnDeleteMark(new DeleteMarkEventArgs(mark));
 			}
+			OnDeleteMark(new DeleteMarkEventArgs(m_mark));
 		}
 
 		protected override void OnMouseEnter(EventArgs e)
@@ -623,6 +684,7 @@ namespace Common.Controls.Timeline
 		{
 			Cursor = Cursors.Default;
 			base.OnMouseLeave(e);
+			OnSelectedMarkMove(new SelectedMarkMoveEventArgs(false, TimeSpan.Zero));
 		}
 
 		public event EventHandler<MarkMovedEventArgs> MarkMoved;
@@ -630,6 +692,13 @@ namespace Common.Controls.Timeline
 		public event EventHandler<RulerClickedEventArgs> ClickedAtTime;
 		public event EventHandler<ModifierKeysEventArgs> TimeRangeDragged;
 		public event EventHandler BeginDragTimeRange;
+		public static event EventHandler<SelectedMarkMoveEventArgs> SelectedMarkMove;
+
+		public virtual void OnSelectedMarkMove(SelectedMarkMoveEventArgs e)
+		{
+			if (SelectedMarkMove != null)
+				SelectedMarkMove(this, e);
+		}
 
 		protected virtual void OnMarkMoved(MarkMovedEventArgs e)
 		{
@@ -680,12 +749,14 @@ namespace Common.Controls.Timeline
 
 		private SortedDictionary<TimeSpan, List<SnapDetails>> StaticSnapPoints { get; set; }
 
-		private SnapDetails CalculateSnapDetailsForPoint(TimeSpan snapTime, int level, Color color)
+		private SnapDetails CalculateSnapDetailsForPoint(TimeSpan snapTime, int level, Color color, bool lineBold, bool solidLine)
 		{
 			SnapDetails result = new SnapDetails();
 			result.SnapLevel = level;
 			result.SnapTime = snapTime;
 			result.SnapColor = color;
+			result.SnapBold = lineBold;
+			result.SnapSolidLine = solidLine;
 
 			// the start time and end times for specified points are 2 pixels
 			// per snap level away from the snap time.
@@ -694,12 +765,12 @@ namespace Common.Controls.Timeline
 			return result;
 		}
 
-		public void AddSnapPoint(TimeSpan snapTime, int level, Color color)
+		public void AddSnapPoint(TimeSpan snapTime, int level, Color color, bool lineBold, bool solidLine)
 		{
 			if (!StaticSnapPoints.ContainsKey(snapTime))
-				StaticSnapPoints.Add(snapTime, new List<SnapDetails> { CalculateSnapDetailsForPoint(snapTime, level, color) });
+				StaticSnapPoints.Add(snapTime, new List<SnapDetails> { CalculateSnapDetailsForPoint(snapTime, level, color, lineBold, solidLine) });
 			else
-				StaticSnapPoints[snapTime].Add(CalculateSnapDetailsForPoint(snapTime, level, color));
+				StaticSnapPoints[snapTime].Add(CalculateSnapDetailsForPoint(snapTime, level, color, lineBold, solidLine));
 
 			if (!SuppressInvalidate) Invalidate();
 		}
@@ -734,15 +805,22 @@ namespace Common.Controls.Timeline
 						if (details == null || (d.SnapLevel > details.SnapLevel && d.SnapColor != Color.Empty))
 							details = d;
 					}
-					p = new Pen(details.SnapColor);
+					int lineBold = 1;
+					if (details.SnapBold)
+						lineBold = 3;
+					p = new Pen(details.SnapColor, lineBold);
 					Single x = timeToPixels(kvp.Key);
-					p.DashPattern = new float[] { details.SnapLevel, details.SnapLevel };
+					if (!details.SnapSolidLine)
+						p.DashPattern = new float[] { details.SnapLevel, details.SnapLevel };
 					if (selectedMarks.ContainsKey(kvp.Key))
 					{
 						p.Width = 3;
 					}
 					g.DrawLine(p, x, 0, x, Height);
 					p.Dispose();
+
+				
+
 				}
 			}
 
@@ -753,6 +831,16 @@ namespace Common.Controls.Timeline
 				Single x = timeToPixels(newMarkPosition);
 				g.DrawLine(p, x, 0, x, Height);
 				p.Dispose();
+
+				//Draws the time next to the selected mark that is being moved.
+				Font drawFont = new Font("Arial", 8, FontStyle.Bold);
+				SolidBrush drawBrush = new SolidBrush(Color.White);
+				StringFormat drawFormat = new StringFormat();
+				g.TextRenderingHint = TextRenderingHint.AntiAlias;
+				g.DrawString(markTime, drawFont, drawBrush, x, 0, drawFormat);
+				drawFont.Dispose();
+				drawBrush.Dispose();
+				drawFormat.Dispose();
 			}
 		}
 
@@ -789,6 +877,18 @@ namespace Common.Controls.Timeline
 		public bool SuppressInvalidate { get; set; }
 	}
 
+	public class SelectedMarkMoveEventArgs
+	{
+		public SelectedMarkMoveEventArgs(bool waveFormMark, TimeSpan selectedMark)
+		{
+			WaveFormMark = waveFormMark;
+			SelectedMark = selectedMark;
+		}
+
+		public bool WaveFormMark { get; set; }
+
+		public TimeSpan SelectedMark { get; set; }
+	}
 
 	public class TimeRangeDraggedEventArgs : EventArgs
 	{

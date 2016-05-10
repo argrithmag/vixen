@@ -10,6 +10,8 @@ using Common.Controls;
 using Common.Controls.ControlsEx.ValueControls;
 using Common.Controls.ColorManagement.ColorModels;
 using Common.Controls.ColorManagement.ColorPicker;
+using Common.Controls.Theme;
+using Common.Resources.Properties;
 
 namespace VixenModules.App.ColorGradients
 {
@@ -27,6 +29,9 @@ namespace VixenModules.App.ColorGradients
 		public GradientEditPanel()
 		{
 			InitializeComponent();
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			ThemeUpdateControls.UpdateControls(this);
 			edit.SelectionDoubleClicked += edit_SelectionDoubleClicked;
 			LockColorEditorHSV_Value = true;
 		}
@@ -115,13 +120,13 @@ namespace VixenModules.App.ColorGradients
 						if (picker.SelectedColors.Count() == 0) {
 							DeleteColor();
 						}
-						else if (picker.SelectedColors.Count() == selectedColors.Count) {
-							int i = 0;
-							foreach (Color selectedColor in picker.SelectedColors) {
-								ColorPoint pt = edit.Selection[i] as ColorPoint;
-								pt.Color = XYZ.FromRGB(selectedColor);
-							}
-						}
+						//else if (picker.SelectedColors.Count() == selectedColors.Count) {
+						//	int i = 0;
+						//	foreach (Color selectedColor in picker.SelectedColors) {
+						//		ColorPoint pt = edit.Selection[i] as ColorPoint;
+						//		pt.Color = XYZ.FromRGB(selectedColor);
+						//	}
+						//}
 						else {
 							double position = edit.Selection.First().Position;
 
@@ -139,7 +144,12 @@ namespace VixenModules.App.ColorGradients
 			}
 			else {
 				if (edit.Selection.Count > 1)
-					MessageBox.Show("Non-discrete color gradient, >1 selected point. oops! please report it.");
+				{
+					//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+					MessageBoxForm.msgIcon = SystemIcons.Error; //this is used if you want to add a system icon to the message form.
+					var messageBox = new MessageBoxForm("Non-discrete color gradient, >1 selected point. oops! please report it.", "Delete library gradient?", false, false);
+					messageBox.ShowDialog();
+				}
 				ColorPoint pt = edit.Selection.FirstOrDefault() as ColorPoint;
 				if (pt == null)
 					return;
@@ -197,7 +207,7 @@ namespace VixenModules.App.ColorGradients
 		{
 			if (edit.Gradient == null || edit.FocusSelection || ReadOnly)
 				return;
-			foreach (int i in edit.SelectedColorIndex) {
+			foreach (int i in edit.SelectedColorIndex.Reverse()) {
 				if (i == -1) return;
 				edit.Gradient.Colors.RemoveAt(i);
 				UpdateUI();
@@ -272,5 +282,25 @@ namespace VixenModules.App.ColorGradients
 			if (e.KeyCode == Keys.Delete)
 				DeleteColor();
 		}
+
+		private void buttonBackground_MouseHover(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImageHover;
+		}
+
+		private void buttonBackground_MouseLeave(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImage;
+
+		}
+
+		#region Draw lines and GroupBox borders
+		private void groupBoxes_Paint(object sender, PaintEventArgs e)
+		{
+			ThemeGroupBoxRenderer.GroupBoxesDrawBorder(sender, e, Font);
+		}
+		#endregion
 	}
 }

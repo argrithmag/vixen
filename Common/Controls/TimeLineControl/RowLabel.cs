@@ -6,6 +6,7 @@ using System.Data;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
+using Common.Controls.Theme;
 
 namespace Common.Controls.Timeline
 {
@@ -61,6 +62,7 @@ namespace Common.Controls.Timeline
 		internal event EventHandler<ModifierKeysEventArgs> LabelClicked;
 		internal event EventHandler<RowHeightChangedEventArgs> HeightChanged;
 		internal event EventHandler HeightResized;
+		internal event EventHandler RowContextMenuSelect;
 
 		private void _TreeToggled()
 		{
@@ -80,6 +82,11 @@ namespace Common.Controls.Timeline
 		private void _HeightResized()
 		{
 			if (HeightResized != null) HeightResized(this, EventArgs.Empty);
+		}
+
+		private void _RowContextMenuSelect()
+		{
+			if (RowContextMenuSelect != null) RowContextMenuSelect(this, EventArgs.Empty);
 		}
 
 		#endregion
@@ -129,11 +136,19 @@ namespace Common.Controls.Timeline
 			base.OnMouseUp(e);
 
 			if (e.Button == MouseButtons.Left) {
-				if (Resizing == true)
+				if (Resizing)
 				{
 					_HeightResized();
 				}
 				Resizing = false;
+			}
+			if (e.Button == MouseButtons.Right)
+			{
+				if (LabelArea.Contains(e.Location) || ((ParentRow.ChildRows.Count == 0) && IconArea.Contains(e.Location)))
+				{
+					_LabelClicked(Form.ModifierKeys);
+				}
+				_RowContextMenuSelect();
 			}
 		}
 
@@ -163,18 +178,22 @@ namespace Common.Controls.Timeline
 
 		protected override void OnPaint(PaintEventArgs e)
 		{
-			using (SolidBrush backgroundBrush = new SolidBrush(SystemColors.ControlLight)) {
-				using (SolidBrush toggleBrush = new SolidBrush(SystemColors.ActiveCaption)) {
-					using (SolidBrush nodeIconBrush = new SolidBrush(SystemColors.ControlDark)) {
-						using (SolidBrush textBrush = new SolidBrush(Color.Black)) {
-							using (Pen wholeBorderPen = new Pen(SystemColors.ControlDarkDark, 1)) {
+			using (SolidBrush backgroundBrush = new SolidBrush(ThemeColorTable.TimeLineLabelBackColor))
+			{
+				using (SolidBrush toggleBrush = new SolidBrush(ThemeColorTable.TimeLineLabelBackColor))
+				{
+					using (SolidBrush nodeIconBrush = new SolidBrush(ThemeColorTable.TimeLineLabelBackColor))
+					{
+						using (SolidBrush textBrush = new SolidBrush(ThemeColorTable.TimeLineForeColor))
+						{
+							using (Pen wholeBorderPen = new Pen(ThemeColorTable.TimeLineGridColor, 1)) {
 								wholeBorderPen.Alignment = System.Drawing.Drawing2D.PenAlignment.Inset;
-								using (Pen toggleBorderPen = new Pen(SystemColors.ControlDark, 1)) {
+								using (Pen toggleBorderPen = new Pen(Color.DimGray, 1)) {
 									toggleBorderPen.Alignment = System.Drawing.Drawing2D.PenAlignment.Inset;
 
 									int fontHeight = 12;
 									fontHeight = Math.Min(fontHeight, (int) (Height*0.4));
-									using (Font font = new Font("Arial", fontHeight)) {
+									using (Font font = new Font(Font.FontFamily, fontHeight)) {
 										IconArea = new Rectangle(0, 0, ToggleTreeButtonWidth, Height);
 										LabelArea = new Rectangle(ToggleTreeButtonWidth, 0, Width - ToggleTreeButtonWidth, Height);
 

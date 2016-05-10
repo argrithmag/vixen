@@ -3,15 +3,18 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using Common.Controls;
+using Common.Controls.Theme;
 using Common.Controls.Timeline;
 using QMLibrary;
+using VixenModules.Analysis.BeatsAndBars.Properties;
 using VixenModules.Media.Audio;
 using VixenModules.Sequence.Timed;
 
 namespace VixenModules.Analysis.BeatsAndBars
 {
 	
-	public partial class BeatsAndBarsDialog : Form
+	public partial class BeatsAndBarsDialog : BaseForm
 	{
 		private ToolTip m_toolTip;
 		private static BeatBarSettingsData m_settingsData = null;
@@ -23,6 +26,15 @@ namespace VixenModules.Analysis.BeatsAndBars
 		public BeatsAndBarsDialog(Audio audio)
 		{
 			InitializeComponent();
+
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			var excludes = new List<Control>();
+			excludes.Add(BarsColorPanel);
+			excludes.Add(BeatCountsColorPanel);
+			excludes.Add(AllColorPanel);
+			excludes.Add(BeatSplitsColorPanel);
+			ThemeUpdateControls.UpdateControls(this, excludes);
 
 			m_allowUpdates = false;
 
@@ -198,6 +210,23 @@ namespace VixenModules.Analysis.BeatsAndBars
 		{
 			AllColorPanel.Enabled = AllFeaturesCB.Checked;
 			SetBeatBarOutputSettings();
+		}
+
+		private void buttonBackground_MouseHover(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.HeadingBackgroundImageHover;
+		}
+
+		private void buttonBackground_MouseLeave(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.HeadingBackgroundImage;
+		}
+
+		private void groupBoxes_Paint(object sender, PaintEventArgs e)
+		{
+			ThemeGroupBoxRenderer.GroupBoxesDrawBorder(sender, e, Font);
 		}
 	}
 }

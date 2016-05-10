@@ -6,18 +6,25 @@ using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
+using Common.Controls;
+using Common.Controls.Theme;
+using Common.Resources.Properties;
 using Vixen.Services;
 using Vixen.Sys;
 using Vixen.Module.App;
 
 namespace VixenModules.App.Curves
 {
-	public partial class CurveLibrarySelector : Form
+	public partial class CurveLibrarySelector : BaseForm
 	{
 		public CurveLibrarySelector()
 		{
 			InitializeComponent();
-			Icon = Common.Resources.Properties.Resources.Icon_Vixen3;
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			ThemeUpdateControls.UpdateControls(this);
+			listViewCurves.BackColor = ThemeColorTable.BackgroundColor;
+			Icon = Resources.Icon_Vixen3;
 			DoubleClickMode = Mode.Ok;
 		}
 
@@ -53,21 +60,21 @@ namespace VixenModules.App.Curves
 			listViewCurves.BeginUpdate();
 			listViewCurves.Items.Clear();
 
-			listViewCurves.LargeImageList = new ImageList();
+			listViewCurves.LargeImageList = new ImageList { ColorDepth = ColorDepth.Depth32Bit, ImageSize = new Size(68, 68) };
 
-			foreach (KeyValuePair<string, Curve> kvp in Library) {
+			foreach (KeyValuePair<string, Curve> kvp in Library)
+			{
 				Curve c = kvp.Value;
 				string name = kvp.Key;
 
-				listViewCurves.LargeImageList.ImageSize = new Size(64, 64);
-				listViewCurves.LargeImageList.Images.Add(name, c.GenerateCurveImage(new Size(64, 64)));
+				var image = c.GenerateGenericCurveImage(new Size(68, 68));
+				Graphics gfx = Graphics.FromImage(image);
+				gfx.DrawRectangle(new Pen(Color.FromArgb(136, 136, 136), 2), 0, 0, 68, 68);
 
-				ListViewItem item = new ListViewItem();
-				item.Text = name;
-				item.Name = name;
-				item.ImageKey = name;
-				item.Tag = c;
+				listViewCurves.LargeImageList.Images.Add(name, image);
 
+				ListViewItem item = new ListViewItem { Text = name, Name = name, ImageKey = name, Tag = c };
+				item.ForeColor = ThemeColorTable.ForeColor;
 				listViewCurves.Items.Add(item);
 			}
 
@@ -75,12 +82,16 @@ namespace VixenModules.App.Curves
 
 			buttonEditCurve.Enabled = false;
 			buttonDeleteCurve.Enabled = false;
+			buttonEditCurve.ForeColor = ThemeColorTable.ForeColorDisabled;
+			buttonDeleteCurve.ForeColor = ThemeColorTable.ForeColorDisabled;
 		}
 
 		private void listViewCurves_SelectedIndexChanged(object sender, EventArgs e)
 		{
 			buttonEditCurve.Enabled = (listViewCurves.SelectedIndices.Count == 1);
 			buttonDeleteCurve.Enabled = (listViewCurves.SelectedIndices.Count == 1);
+			buttonEditCurve.ForeColor = buttonEditCurve.Enabled ? ThemeColorTable.ForeColor : ThemeColorTable.ForeColorDisabled;
+			buttonDeleteCurve.ForeColor = buttonDeleteCurve.Enabled ? ThemeColorTable.ForeColor : ThemeColorTable.ForeColorDisabled;
 		}
 
 		public Tuple<string, Curve> SelectedItem
@@ -102,22 +113,27 @@ namespace VixenModules.App.Curves
 			{
 				if (dialog.Response == string.Empty)
 				{
-					MessageBox.Show("Please enter a name.");
+					//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+					MessageBoxForm.msgIcon = SystemIcons.Error; //this is used if you want to add a system icon to the message form.
+					var messageBox = new MessageBoxForm("Please enter a name.", "Curve Name", false, false);
+					messageBox.ShowDialog();
 					continue;
 				}
 
 				if (Library.Contains(dialog.Response))
 				{
-					DialogResult result = MessageBox.Show("There is already a curve with that name. Do you want to overwrite it?",
-														  "Overwrite curve?", MessageBoxButtons.YesNoCancel);
-					if (result == DialogResult.Yes)
+					//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+					MessageBoxForm.msgIcon = SystemIcons.Question; //this is used if you want to add a system icon to the message form.
+					var messageBox = new MessageBoxForm("There is already a curve with that name. Do you want to overwrite it?", "Overwrite curve?", true, true);
+					messageBox.ShowDialog();
+					if (messageBox.DialogResult == DialogResult.OK)
 					{
 						Library.AddCurve(dialog.Response, new Curve());
 						Library.EditLibraryCurve(dialog.Response);
 						PopulateListWithCurves();
 						break;
 					}
-					else if (result == DialogResult.Cancel)
+					if (messageBox.DialogResult == DialogResult.Cancel)
 					{
 						break;
 					}
@@ -146,13 +162,12 @@ namespace VixenModules.App.Curves
 		{
 			if (listViewCurves.SelectedItems.Count == 0)
 				return;
+			//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+			MessageBoxForm.msgIcon = SystemIcons.Question; //this is used if you want to add a system icon to the message form.
+			var messageBox = new MessageBoxForm("If you delete this library curve, ALL places it is used will be unlinked and will become independent curves. Are you sure you want to continue?", "Delete library curve?", true, false);
+			messageBox.ShowDialog();
 
-			DialogResult result =
-				MessageBox.Show("If you delete this library curve, ALL places it is used will be unlinked and will" +
-				                " become independent curves. Are you sure you want to continue?", "Delete library curve?",
-				                MessageBoxButtons.YesNoCancel);
-
-			if (result == System.Windows.Forms.DialogResult.Yes) {
+			if (messageBox.DialogResult == DialogResult.OK) {
 				Library.RemoveCurve(listViewCurves.SelectedItems[0].Name);
 				PopulateListWithCurves();
 			}
@@ -213,5 +228,17 @@ namespace VixenModules.App.Curves
 			Edit
 		}
 
+		private void buttonBackground_MouseHover(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImageHover;
+		}
+
+		private void buttonBackground_MouseLeave(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImage;
+
+		}
 	}
 }

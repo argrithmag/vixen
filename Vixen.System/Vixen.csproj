@@ -61,6 +61,8 @@
       <HintPath>..\packages\NLog.3.1.0.0\lib\net45\NLog.dll</HintPath>
       <Private>False</Private>
     </Reference>
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
     <Reference Include="System" />
     <Reference Include="System.configuration" />
     <Reference Include="System.Core">
@@ -71,6 +73,7 @@
       <RequiredTargetFramework>3.0</RequiredTargetFramework>
     </Reference>
     <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xaml" />
     <Reference Include="System.Xml.Linq">
       <RequiredTargetFramework>3.5</RequiredTargetFramework>
     </Reference>
@@ -79,18 +82,32 @@
     </Reference>
     <Reference Include="System.Data" />
     <Reference Include="System.Xml" />
+    <Reference Include="WindowsBase" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Attributes\BoolDescriptionAttribute.cs" />
+    <Compile Include="Attributes\BrowsableCategoryAttribute.cs" />
+    <Compile Include="Attributes\BrowsablePropertyAttribute.cs" />
+    <Compile Include="Attributes\CategoryEditorAttribute.cs" />
+    <Compile Include="Attributes\CategoryOrderAttribute.cs" />
+    <Compile Include="Attributes\FlatternHierarchyAttribute.cs" />
+    <Compile Include="Attributes\IOrderableAttribute.cs" />
+    <Compile Include="Attributes\NumberRangeAttribute.cs" />
+    <Compile Include="Attributes\OffsetAttribute.cs" />
+    <Compile Include="Attributes\PropertyEditorAttribute.cs" />
+    <Compile Include="Attributes\PropertyOrderAttribute.cs" />
     <Compile Include="Cache\Event\CacheEventArgs.cs" />
     <Compile Include="Cache\Event\CacheStartedEventArgs.cs" />
     <Compile Include="Cache\Sequence\ISequenceCache.cs" />
     <Compile Include="Cache\Sequence\PreCachingSequenceEngine.cs" />
     <Compile Include="Cache\Sequence\FixedIntervalManualTiming.cs" />
+    <Compile Include="Cache\Sequence\SequenceIntervalGenerator.cs" />
     <Compile Include="Commands\16BitCommand.cs" />
     <Compile Include="Commands\32BitCommand.cs" />
     <Compile Include="Commands\64BitCommand.cs" />
     <Compile Include="Commands\8BitCommand.cs" />
     <Compile Include="Commands\ColorCommand.cs" />
+    <Compile Include="Commands\CommandExtensions.cs" />
     <Compile Include="Commands\UnknownValueCommand.cs" />
     <Compile Include="Common\ColorSpaces.cs" />
     <Compile Include="Common\ColorSpaceTypeConverter.cs" />
@@ -161,6 +178,7 @@
     <Compile Include="Export\CSVWriter.cs" />
     <Compile Include="Export\Export.cs" />
     <Compile Include="Export\ExportCommandHandler.cs" />
+    <Compile Include="Export\ESEQWriter.cs" />
     <Compile Include="Export\FSEQWriter.cs" />
     <Compile Include="Export\IExport.cs" />
     <Compile Include="Export\Vir2Writer.cs" />
@@ -308,6 +326,7 @@
     <Compile Include="Sys\Managers\OutputDeviceExecution.cs" />
     <Compile Include="Sys\Managers\OutputDeviceFacade.cs" />
     <Compile Include="Sys\Managers\SmartOutputControllerManager.cs" />
+    <Compile Include="Sys\OutputStateList.cs" />
     <Compile Include="Sys\OutputStateListAggregator.cs" />
     <Compile Include="Sys\Output\BasicOutputModuleExecutionControl.cs" />
     <Compile Include="Services\EditorService.cs" />
@@ -814,6 +833,8 @@
     <Compile Include="Sys\VixenSystem.cs" />
     <Compile Include="Sys\WindowsMultimedia.cs" />
     <Compile Include="Sys\XmlHelper.cs" />
+    <Compile Include="TypeConverters\BooleanStringTypeConverter.cs" />
+    <Compile Include="TypeConverters\TargetElementDepthConverter.cs" />
     <Compile Include="Utility\cEventHelper.cs" />
     <Compile Include="Utility\MiniStackTrace.cs" />
     <Compile Include="Utility\PathUtility.cs" />

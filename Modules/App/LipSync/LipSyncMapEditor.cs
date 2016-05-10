@@ -6,11 +6,14 @@ using System.Drawing;
 using System.Windows.Forms;
 using System.Resources;
 using System.Reflection;
+using Common.Controls;
+using Common.Controls.Theme;
+using Common.Resources.Properties;
 using Vixen.Sys;
 
 namespace VixenModules.App.LipSyncApp
 {
-    public partial class LipSyncMapEditor : Form
+	public partial class LipSyncMapEditor : BaseForm
     {
         private static NLog.Logger Logging = NLog.LogManager.GetCurrentClassLogger();
         private LipSyncMapData _mapping;
@@ -24,13 +27,18 @@ namespace VixenModules.App.LipSyncApp
         {
             _rowNames = new List<string>();
             this.LibraryMappingName = "Default";
-            InitializeComponent();
+			InitializeComponent();
             LoadResourceBitmaps();
         }
 
         public LipSyncMapEditor(LipSyncMapData mapData)
         {
-            InitializeComponent();
+			InitializeComponent();
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			ThemeUpdateControls.UpdateControls(this);
+			dataGridView1.DefaultCellStyle.ForeColor = Color.Black;
+			Icon = Resources.Icon_Vixen3;
             _doMatrixUpdate = false;
             LoadResourceBitmaps();
             this.MapData = mapData;
@@ -96,15 +104,11 @@ namespace VixenModules.App.LipSyncApp
             ElementNode theNode = VixenSystem.Nodes.ToList().Find(
                 delegate(ElementNode node)
                 {
-                    if (node.IsLeaf)
+                    if (node.IsLeaf & node.Element != null)
                     {
                         return node.Element.Name.Equals(elementName);
                     }
-                    else
-                    {
-                        return node.Name.Equals(elementName);
-                    }
-                    
+                    return node.Name.Equals(elementName);
                 }
             );
 
@@ -203,16 +207,16 @@ namespace VixenModules.App.LipSyncApp
                 {
                     ResourceManager lipSyncRM = new ResourceManager("VixenModules.App.LipSyncApp.LipSyncResources", assembly);
                     _phonemeBitmaps = new Dictionary<string, Bitmap>();
-                    _phonemeBitmaps.Add("AI", (Bitmap)lipSyncRM.GetObject("AI"));
-                    _phonemeBitmaps.Add("E", (Bitmap)lipSyncRM.GetObject("E"));
-                    _phonemeBitmaps.Add("ETC", (Bitmap)lipSyncRM.GetObject("etc"));
-                    _phonemeBitmaps.Add("FV", (Bitmap)lipSyncRM.GetObject("FV"));
-                    _phonemeBitmaps.Add("L", (Bitmap)lipSyncRM.GetObject("L"));
-                    _phonemeBitmaps.Add("MBP", (Bitmap)lipSyncRM.GetObject("MBP"));
-                    _phonemeBitmaps.Add("O", (Bitmap)lipSyncRM.GetObject("O"));
-                    _phonemeBitmaps.Add("REST", (Bitmap)lipSyncRM.GetObject("rest"));
-                    _phonemeBitmaps.Add("U", (Bitmap)lipSyncRM.GetObject("U"));
-                    _phonemeBitmaps.Add("WQ", (Bitmap)lipSyncRM.GetObject("WQ"));
+					_phonemeBitmaps.Add("AI", (Bitmap)lipSyncRM.GetObject("AI_LightGray"));
+					_phonemeBitmaps.Add("E", (Bitmap)lipSyncRM.GetObject("E_LightGray"));
+					_phonemeBitmaps.Add("ETC", (Bitmap)lipSyncRM.GetObject("etc_LightGray"));
+					_phonemeBitmaps.Add("FV", (Bitmap)lipSyncRM.GetObject("FV_LightGray"));
+					_phonemeBitmaps.Add("L", (Bitmap)lipSyncRM.GetObject("L_LightGray"));
+					_phonemeBitmaps.Add("MBP", (Bitmap)lipSyncRM.GetObject("MBP_LightGray"));
+					_phonemeBitmaps.Add("O", (Bitmap)lipSyncRM.GetObject("O_LightGray"));
+					_phonemeBitmaps.Add("REST", (Bitmap)lipSyncRM.GetObject("rest_LightGray"));
+					_phonemeBitmaps.Add("U", (Bitmap)lipSyncRM.GetObject("U_LightGray"));
+					_phonemeBitmaps.Add("WQ", (Bitmap)lipSyncRM.GetObject("WQ_LightGray"));
                 }
             }
         }
@@ -233,10 +237,11 @@ namespace VixenModules.App.LipSyncApp
             dataGridView1.AutoResizeRowHeadersWidth(DataGridViewRowHeadersWidthSizeMode.AutoSizeToAllHeaders);
             dataGridView1.DataSource = currentDataTable;
             //dataGridView1.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.AllCells;
-            for (int j = 1; j < dataGridView1.Columns.Count; j++)
+            for (int j = 1; j < dataGridView1.Columns.Count - 1; j++)
             {
-                dataGridView1.Columns[j].Width = 53;
+                dataGridView1.Columns[j].Width = 60;
             }
+			dataGridView1.Columns[dataGridView1.Columns.Count - 1].Width = 90;
             dataGridView1.Columns[COLOR_COLUMN_NAME].SortMode = DataGridViewColumnSortMode.NotSortable;
 
         }
@@ -411,7 +416,7 @@ namespace VixenModules.App.LipSyncApp
             }
         }
 
-        private void Assign_Click(object sender, EventArgs e)
+        private void buttonAssign_Click(object sender, EventArgs e)
         {
             LipSyncNodeSelect nodeSelectDlg = new LipSyncNodeSelect();
             //nodeSelectDlg.MaxNodes = _mapping.MapItems.Count;
@@ -458,6 +463,19 @@ namespace VixenModules.App.LipSyncApp
 
                 reconfigureDataTable();
             }
+			Refresh();
         }
+
+		private void buttonBackground_MouseHover(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImageHover;
+		}
+
+		private void buttonBackground_MouseLeave(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImage;
+		}
     }
 }

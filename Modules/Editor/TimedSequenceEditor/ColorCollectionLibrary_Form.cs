@@ -4,14 +4,21 @@ using System.Drawing;
 using System.IO;
 using System.Runtime.Serialization;
 using System.Windows.Forms;
+using System.Windows.Media;
 using System.Xml;
+using Common.Controls;
 using Common.Controls.ColorManagement.ColorModels;
 using Common.Controls.ColorManagement.ColorPicker;
+using Common.Controls.Theme;
+using Common.Resources;
+using Common.Resources.Properties;
 using VixenModules.Sequence.Timed;
+using Color = System.Drawing.Color;
+using Pen = System.Drawing.Pen;
 
 namespace VixenModules.Editor.TimedSequenceEditor
 {
-	public partial class ColorCollectionLibrary_Form : Form
+	public partial class ColorCollectionLibrary_Form : BaseForm
 	{
 		#region Member Variables
 
@@ -20,6 +27,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 		private ColorCollection _currentCollection;
 		private Color _colorValue;
 		private string _lastFolder;
+		private readonly Pen _borderPen = new Pen(ThemeColorTable.BorderColor, 2);
 
 		#endregion
 
@@ -28,7 +36,15 @@ namespace VixenModules.Editor.TimedSequenceEditor
 		public ColorCollectionLibrary_Form(List<ColorCollection> collections)
 		{
 			InitializeComponent();
-			Icon = Common.Resources.Properties.Resources.Icon_Vixen3;
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			ThemeUpdateControls.UpdateControls(this);
+			listViewColors.BackColor = ThemeColorTable.BackgroundColor;
+			buttonNewCollection.Image = Tools.GetIcon(Resources.add, 24);
+			buttonNewCollection.Text = "";
+			buttonDeleteCollection.Image = Tools.GetIcon(Resources.minus, 24);
+			buttonDeleteCollection.Text = "";
+			Icon = Resources.Icon_Vixen3;
 			ColorCollections = collections;
 			PopulateCollectionList();
 			_isDirty = false;
@@ -72,7 +88,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 		{
 			_currentCollection = (ColorCollection)comboBoxCollections.SelectedItem;
 			textBoxDescription.Text = _currentCollection.Description;
-			deleteCollectionToolStripMenuItem.Enabled = textBoxDescription.Enabled = true;
+			buttonDeleteCollection.Enabled = textBoxDescription.Enabled = true;
 			PopulateCollectionColors(_currentCollection);
 		}
 
@@ -80,10 +96,13 @@ namespace VixenModules.Editor.TimedSequenceEditor
 		{
 			if (_isDirty)
 			{
-				var warnResult = MessageBox.Show(@"You will loose any changes, do you wish to save them now ?", @"Warning", MessageBoxButtons.YesNoCancel, MessageBoxIcon.Warning);
-				if (warnResult == DialogResult.Yes)
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm("You will loose any changes, do you wish to save them now ?", "Warning", true, true);
+				messageBox.ShowDialog();
+				if (messageBox.DialogResult == DialogResult.OK)
 					DialogResult = DialogResult.OK;
-				if (warnResult == DialogResult.Cancel)
+				if (messageBox.DialogResult == DialogResult.Cancel)
 					e.Cancel = true;
 			}
 		}
@@ -95,7 +114,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 		private void listViewColors_SelectedIndexChanged(object sender, EventArgs e)
 		{
-			removeColorToolStripMenuItem.Enabled = (listViewColors.SelectedItems.Count > 0);
+			buttonRemoveColor.Enabled = (listViewColors.SelectedItems.Count > 0);
 		}
 
 		private void textBoxDescription_KeyUp(object sender, KeyEventArgs e)
@@ -228,9 +247,11 @@ namespace VixenModules.Editor.TimedSequenceEditor
 					{
 						if (ColorCollections.Contains(colorCollection))
 						{
-							DialogResult result = MessageBox.Show(@"A collection with the name " + colorCollection.Name + @" already exists. Do you want to overwrite it?",
-										  @"Overwrite collection?", MessageBoxButtons.YesNoCancel);
-							if (result == DialogResult.Yes)
+							//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+							MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+							var messageBox = new MessageBoxForm("A collection with the name " + colorCollection.Name + @" already exists. Do you want to overwrite it?", "Overwrite collection?", true, false);
+							messageBox.ShowDialog();
+							if (messageBox.DialogResult == DialogResult.OK)
 							{
 								//Remove the collection to overwrite, we will add the new one below.
 								ColorCollections.Remove(colorCollection);
@@ -247,8 +268,12 @@ namespace VixenModules.Editor.TimedSequenceEditor
 				}
 				PopulateCollectionList();
 				if (_currentCollection != null) comboBoxCollections.Text = _currentCollection.Name;
-				MessageBox.Show(@"Imported " + importCount + @" Color Collections.", @"Color Collections Import", MessageBoxButtons.OK,
-					MessageBoxIcon.Information);
+				{
+					//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+					MessageBoxForm.msgIcon = SystemIcons.Information; //this is used if you want to add a system icon to the message form.
+					var messageBox = new MessageBoxForm("Imported " + importCount + @" Color Collections.", "Color Collections Import", false, false);
+					messageBox.ShowDialog();
+				}
 			}			
 		}
 
@@ -257,8 +282,11 @@ namespace VixenModules.Editor.TimedSequenceEditor
 		{
 			if (_currentCollection != null)
 			{
-				DialogResult result = MessageBox.Show(string.Format("Are you sure you want to delete the collection: {0} ?", _currentCollection.Name), @"Delete collection?", MessageBoxButtons.YesNo);
-				if (result == DialogResult.Yes)
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Information; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm(string.Format("Are you sure you want to delete the collection: {0} ?", _currentCollection.Name), "Delete collection?", true, false);
+				messageBox.ShowDialog();
+				if (messageBox.DialogResult == DialogResult.OK)
 				{
 					ColorCollections.Remove(_currentCollection);
 					listViewColors.Items.Clear();
@@ -277,15 +305,20 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			{
 				if (dialog.Response == string.Empty)
 				{
-					MessageBox.Show(@"Please enter a name.");
+					//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+					MessageBoxForm.msgIcon = SystemIcons.Error; //this is used if you want to add a system icon to the message form.
+					var messageBox = new MessageBoxForm("Please enter a name.", "Color Collection Name", false, false);
+					messageBox.ShowDialog();
 					continue;
 				}
 				ColorCollection item = new ColorCollection {Name = dialog.Response};
 				if (ColorCollections.Contains(item))
 				{
-					DialogResult result = MessageBox.Show(@"A collection with the name " + item.Name + @" already exists. Do you want to overwrite it?",
-														  @"Overwrite collection?", MessageBoxButtons.YesNoCancel);
-					if (result == DialogResult.Yes)
+					//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+					MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+					var messageBox = new MessageBoxForm("A collection with the name " + item.Name + @" already exists. Do you want to overwrite it?", "Overwrite collection?", true, true);
+					messageBox.ShowDialog();
+					if (messageBox.DialogResult == DialogResult.OK)
 					{
 						ColorCollections.Remove(item);
 						ColorCollections.Add(item);
@@ -329,7 +362,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 					comboBoxCollections.Items.Add(collection);
 				}
 			}
-			deleteCollectionToolStripMenuItem.Enabled = addColorToolStripMenuItem.Enabled = false;
+			buttonDeleteCollection.Enabled = buttonAddColor.Enabled = false;
 		}
 
 		private void PopulateCollectionColors(ColorCollection collection)
@@ -348,7 +381,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 				using (SolidBrush brush = new SolidBrush(colorItem))
 				{
 					gfx.FillRectangle(brush, 0, 0, 48, 48);
-					gfx.DrawRectangle(new Pen(Color.Black, 2), 0, 0, 48, 48);
+					gfx.DrawRectangle(_borderPen, 0, 0, 48, 48);
 				}
 
 				listViewColors.LargeImageList.Images.Add(colorItem.ToString(), result);
@@ -363,10 +396,63 @@ namespace VixenModules.Editor.TimedSequenceEditor
 				listViewColors.Items.Add(item);
 			}
 			listViewColors.EndUpdate();
-			addColorToolStripMenuItem.Enabled = true;
+			buttonAddColor.Enabled = true;
 		}
 
 		#endregion
 
+		private void buttonBackground_MouseHover(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImageHover;
+		}
+
+		private void buttonBackground_MouseLeave(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImage;
+
+		}
+
+		private void buttonNewCollection_Click(object sender, EventArgs e)
+		{
+			NewColorCollection();
+		}
+
+		private void buttonDeleteCollection_Click(object sender, EventArgs e)
+		{
+			DeleteColorCollection();
+		}
+
+		private void buttonImportCollection_Click(object sender, EventArgs e)
+		{
+			ImportColorCollections();
+		}
+
+		private void buttonExportCollection_Click(object sender, EventArgs e)
+		{
+			ExportColorCollections();
+		}
+
+		private void buttonAddColor_Click(object sender, EventArgs e)
+		{
+			AddColorToCollection();
+		}
+
+		private void buttonRemoveColor_Click(object sender, EventArgs e)
+		{
+			RemoveColorFromCollection();
+		}
+
+		private void buttonTextColorChange(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.ForeColor = btn.Enabled ? ThemeColorTable.ForeColor : ThemeColorTable.ForeColorDisabled;
+		}
+
+		private void comboBox_DrawItem(object sender, DrawItemEventArgs e)
+		{
+			ThemeComboBoxRenderer.DrawItem(sender, e);
+		}
 	}
 }

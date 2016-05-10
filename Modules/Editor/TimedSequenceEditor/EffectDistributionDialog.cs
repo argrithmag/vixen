@@ -7,15 +7,21 @@ using System.Linq;
 using System.Text;
 using System.Windows.Forms;
 using System.Globalization;
+using Common.Controls;
+using Common.Controls.Theme;
+using Common.Resources.Properties;
 
 namespace VixenModules.Editor.TimedSequenceEditor
 {
-	public partial class EffectDistributionDialog : Form
+	public partial class EffectDistributionDialog : BaseForm
 	{
 		private const string timeFormat = @"m\:ss\.fff";
 		public EffectDistributionDialog()
 		{
 			InitializeComponent();
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			ThemeUpdateControls.UpdateControls(this);
 		}
 		public string ElementCount
 		{
@@ -387,6 +393,27 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			{
 				btnOK.Enabled = false;
 			}
+		}
+
+		#region Draw lines and GroupBox borders
+		
+		private void groupBoxes_Paint(object sender, PaintEventArgs e)
+		{
+			ThemeGroupBoxRenderer.GroupBoxesDrawBorder(sender, e, Font);
+		}
+		#endregion
+
+		private void buttonBackground_MouseHover(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImageHover;
+		}
+
+		private void buttonBackground_MouseLeave(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImage;
+
 		}
 	}
 }

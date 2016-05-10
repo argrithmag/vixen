@@ -6,27 +6,33 @@ using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
+using Common.Controls;
+using Common.Controls.Theme;
 using Common.Resources;
 using Common.Resources.Properties;
 
 namespace VixenModules.App.SuperScheduler
 {
-	public partial class SetupForm : Form
+	public partial class SetupForm : BaseForm
 	{
 		public SetupForm(SuperSchedulerData data)
 		{
 			InitializeComponent();
 
-			buttonAddSchedule.Image = Tools.GetIcon(Resources.add, 16);
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			
+			buttonAddSchedule.Image = Tools.GetIcon(Resources.add, 24);
 			buttonAddSchedule.Text = "";
-			buttonDeleteSchedule.Image = Tools.GetIcon(Resources.delete, 16);
+			buttonDeleteSchedule.Image = Tools.GetIcon(Resources.delete, 24);
 			buttonDeleteSchedule.Text = "";
-			buttonEditSchedule.Image = Tools.GetIcon(Resources.pencil, 16);
+			buttonEditSchedule.Image = Tools.GetIcon(Resources.pencil, 24);
 			buttonEditSchedule.Text = "";
-			buttonEditShow.Image = Tools.GetIcon(Resources.table_edit, 16);
+			buttonEditShow.Image = Tools.GetIcon(Resources.table_edit, 24);
 			buttonEditShow.Text = "";
-			buttonHelp.Image = Tools.GetIcon(Resources.help, 16);
+			buttonHelp.Image = Tools.GetIcon(Resources.help, 24);
 
+			ThemeUpdateControls.UpdateControls(this);
 			
 			Data = data;
 		}
@@ -64,9 +70,9 @@ namespace VixenModules.App.SuperScheduler
 			string daySt = String.Empty;
 			if (item.Monday && item.Tuesday && item.Wednesday && item.Thursday && item.Friday && item.Saturday && item.Sunday)
 				daySt = "Everyday";
-			else if (item.Monday && item.Tuesday && item.Wednesday && item.Thursday && item.Friday && !(item.Saturday && item.Sunday))
+			else if (item.Monday && item.Tuesday && item.Wednesday && item.Thursday && item.Friday && !(item.Saturday || item.Sunday))
 				daySt = "Weekdays";
-			else if (item.Saturday && item.Sunday && !(item.Monday && item.Tuesday && item.Wednesday && item.Thursday && item.Friday))
+			else if (item.Saturday && item.Sunday && !(item.Monday || item.Tuesday || item.Wednesday || item.Thursday || item.Friday))
 				daySt = "Weekends";
 			else
 			{
@@ -173,7 +179,11 @@ namespace VixenModules.App.SuperScheduler
 			{
 				ListViewItem lvItem = listViewItems.SelectedItems[0];
 				ScheduleItem scheduleItem = lvItem.Tag as ScheduleItem;
-				if (MessageBox.Show("Are you sure you want to delete the selected schedule?", "Delete Schedule", MessageBoxButtons.YesNoCancel) == System.Windows.Forms.DialogResult.Yes)
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm("Are you sure you want to delete the selected schedule?", "Delete Schedule", true, false);
+				messageBox.ShowDialog();
+				if (messageBox.DialogResult == DialogResult.OK)
 				{
 					listViewItems.Items.Remove(lvItem);
 					Data.Items.Remove(scheduleItem);
@@ -210,7 +220,10 @@ namespace VixenModules.App.SuperScheduler
 				}
 				else
 				{
-					MessageBox.Show("The selected schedule does not have a show associated with it.", "Edit a Show", MessageBoxButtons.OKCancel, MessageBoxIcon.Error);
+					//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+					MessageBoxForm.msgIcon = SystemIcons.Error; //this is used if you want to add a system icon to the message form.
+					var messageBox = new MessageBoxForm("The selected schedule does not have a show associated with it.", "Edit a Show", false, true);
+					messageBox.ShowDialog();
 				}
 			}
 		}
@@ -233,6 +246,24 @@ namespace VixenModules.App.SuperScheduler
 		private void editTheAssociatedShowToolStripMenuItem_Click(object sender, EventArgs e)
 		{
 			EditSelectedShow();
+		}
+
+		private void buttonBackground_MouseHover(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImageHover;
+		}
+
+		private void buttonBackground_MouseLeave(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImage;
+
+		}
+
+		private void groupBoxes_Paint(object sender, PaintEventArgs e)
+		{
+			ThemeGroupBoxRenderer.GroupBoxesDrawBorder(sender, e, Font);
 		}
 	}
 }

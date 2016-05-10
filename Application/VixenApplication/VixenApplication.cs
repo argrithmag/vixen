@@ -1,10 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Text;
 using System.Linq;
+using System.Runtime.Serialization;
 using System.Windows.Forms;
 using System.Diagnostics;
 using System.IO;
+using System.Xml;
 using System.Xml.Serialization;
 using System.Runtime;
 using Vixen.Module.Editor;
@@ -14,10 +17,11 @@ using Vixen.Sys;
 using NLog;
 using Common.Resources.Properties;
 using Common.Controls;
+using Common.Controls.Theme;
 
 namespace VixenApplication
 {
-	public partial class VixenApplication : Form, IApplication
+	public partial class VixenApplication : BaseForm, IApplication
 	{
 		private static NLog.Logger Logging = LogManager.GetCurrentClassLogger();
 
@@ -28,13 +32,31 @@ namespace VixenApplication
 		private bool _devBuild = false;
 		private string _rootDataDirectory;
 		private CpuUsage _cpuUsage;
+		private bool _perfCountersAvailable;
 
 		private VixenApplicationData _applicationData;
 
 		public VixenApplication()
 		{
 			InitializeComponent();
+			labelVersion.Font = new Font("Segoe UI", 14);
+			labelDebugVersion.Font = new Font("Segoe UI", 9);
+			//Get rid of the ugly grip that we dont want to show anyway. 
+			//Workaround for a MS bug
+			statusStrip.Padding = new Padding(statusStrip.Padding.Left,
+			statusStrip.Padding.Top, statusStrip.Padding.Left, statusStrip.Padding.Bottom);
+			statusStrip.Font = SystemFonts.StatusFont;
+
 			Icon = Resources.Icon_Vixen3;
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			ThemeUpdateControls.UpdateControls(this);
+			statusStrip.BackColor = ThemeColorTable.BackgroundColor;
+			statusStrip.ForeColor = ThemeColorTable.ForeColor;
+			toolStripStatusLabel1.ForeColor = ThemeColorTable.ForeColor;
+			toolStripStatusLabelExecutionLight.ForeColor = ThemeColorTable.ForeColor;
+			toolStripStatusLabelExecutionState.ForeColor = ThemeColorTable.ForeColor;
+			toolStripStatusLabel_memory.ForeColor = ThemeColorTable.ForeColor;
 
 			string[] args = Environment.GetCommandLineArgs();
 			foreach (string arg in args) {
@@ -66,7 +88,6 @@ namespace VixenApplication
 			var myMenu = new AppCommand("Options", "Options...");
 			myMenu.Click += optionsToolStripMenuItem_Click;
 			toolsMenu.Add(myMenu);
-
 		}
 
 		private void StartJITProfiler()
@@ -104,6 +125,8 @@ namespace VixenApplication
 		private void VixenApplication_Load(object sender, EventArgs e)
 		{
 			initializeEditorTypes();
+			menuStripMain.Renderer = new ThemeToolStripRenderer();
+			
 			openFileDialog.InitialDirectory = SequenceService.SequenceDirectory;
 
 			// Add menu items for the logs.
@@ -114,14 +137,17 @@ namespace VixenApplication
 			foreach (string logName in di.GetFiles().Select(x => x.Name)) {
 				logsToolStripMenuItem.DropDownItems.Add(logName, null,
 				                                        (menuSender, menuArgs) => _ViewLog(((ToolStripMenuItem) menuSender).Text));
+			//	logsToolStripMenuItem.DropDownItems.ForeColor = Color.FromArgb(90, 90, 90);
 			}
-
 			PopulateRecentSequencesList();
 		}
 
 		private void VixenApplication_Shown(object sender, EventArgs e)
 		{
 			CheckForTestBuild();
+			//Try to make sure at load we are on top.
+			TopMost = true;
+			TopMost = false;
 		}
 
 		private void PopulateVersionStrings()
@@ -140,17 +166,27 @@ namespace VixenApplication
 				}
 			}
 
-			labelDebugVersion.Text = string.Format("Build #{0}", version.Build);
+			if (version.Build > 0)
+			{
+				labelDebugVersion.Text = string.Format("Build #{0}", version.Build);
+			}
+			else
+			{
+				labelDebugVersion.Text = @"Test Build";
+				labelDebugVersion.ForeColor = Color.Yellow;
+			}
+			
 			labelDebugVersion.Visible = true;
 		}
 
 		private void CheckForTestBuild()
 		{
-			if (_devBuild) {
-				MessageBox.Show(
-					"Please be aware that this is a development version. Some parts of the software may not work, " +
-					"and data loss is possible! Please backup your data before using this version of the software.",
-					"Development/Test Software", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+			if (_devBuild) 
+			{
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Exclamation;
+				var messageBox = new MessageBoxForm("Please be aware that this is a development version. Some parts of the software may not work, and data loss is possible! Please backup your data before using this version of the software.", "Development/Test Software", false, false);
+				messageBox.ShowDialog();
 			}
 		}
 
@@ -197,14 +233,19 @@ namespace VixenApplication
 				if (!string.IsNullOrEmpty(directory) && Directory.Exists(directory))
 				{
 					_rootDataDirectory = directory;
+					string profileName = profile.GetSetting(XMLProfileSettings.SettingType.Profiles, "Profile" + profileToLoad + "/Name", string.Empty);
+					UpdateTitleWithProfileName(profileName);
 				}
 				else
 				{
 					string name = profile.GetSetting(XMLProfileSettings.SettingType.Profiles, "Profile" + profileToLoad + "/Name", string.Empty);
-					MessageBox.Show("Selected profile '" + name + "' data directory does not exist!" + Environment.NewLine + Environment.NewLine + 
+					//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+					MessageBoxForm.msgIcon = SystemIcons.Error; //this is used if you want to add a system icon to the message form.
+					var messageBox = new MessageBoxForm("Selected profile '" + name + "' data directory does not exist!" + Environment.NewLine + Environment.NewLine +
 									directory + Environment.NewLine + Environment.NewLine +
 									"Select a different profile to load or use the Profile Editor to create a new profile.",
-									"Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+									"Error", false, false);
+					messageBox.ShowDialog();
 				}
 			}
 
@@ -221,27 +262,26 @@ namespace VixenApplication
 					if (!string.IsNullOrEmpty(directory) && Directory.Exists(directory))
 					{
 						_rootDataDirectory = directory;
+						UpdateTitleWithProfileName(selectProfile.ProfileName);
 						break;
 					}
-					else
-					{
-						MessageBox.Show(
-							"The data directory for the selected profile does not exist!" + Environment.NewLine + Environment.NewLine + 
-							directory + Environment.NewLine + Environment.NewLine +
-							"Select a different profile to load or use the Profile Editor to create a new profile.",
-							"Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
-					}
+					//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+					MessageBoxForm.msgIcon = SystemIcons.Error; //this is used if you want to add a system icon to the message form.
+					var messageBox = new MessageBoxForm("The data directory for the selected profile does not exist!" + Environment.NewLine + Environment.NewLine +
+						directory + Environment.NewLine + Environment.NewLine +
+						"Select a different profile to load or use the Profile Editor to create a new profile.",
+						"Error", false, false);
+					messageBox.ShowDialog();
 				}
 				else if (result == DialogResult.Cancel)
 				{
-					DialogResult exit = MessageBox.Show(
-						Application.ProductName + " cannot continue without a vaild profile." + Environment.NewLine + Environment.NewLine +
+					//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+					MessageBoxForm.msgIcon = SystemIcons.Warning;
+					var messageBox = new MessageBoxForm(Application.ProductName + " cannot continue without a vaild profile." + Environment.NewLine + Environment.NewLine +
 						"Are you sure you want to exit " + Application.ProductName + "?",
-						Application.ProductName,
-						MessageBoxButtons.YesNo,
-						MessageBoxIcon.None,
-						MessageBoxDefaultButton.Button2);
-					if (exit == DialogResult.Yes)
+						Application.ProductName, true, false);
+					messageBox.ShowDialog();
+					if (messageBox.DialogResult == DialogResult.OK)
 					{
 						Environment.Exit(0);
 					}
@@ -254,6 +294,11 @@ namespace VixenApplication
 			}
 
 			SetLogFilePaths();
+		}
+
+		private void UpdateTitleWithProfileName(string profileName)
+		{
+			Text = string.Format("Vixen Administration - {0} Profile", profileName);
 		}
 
 		/// <summary>
@@ -347,8 +392,11 @@ namespace VixenApplication
 						IEditorUserInterface editor = EditorService.Instance.CreateEditor(fileType);
 						if (editor == null) {
 							Logging.Error("Can't find an appropriate editor to open file of type " + fileType);
-							MessageBox.Show("Can't find an editor to open this file type. (\"" + fileType + "\")",
-											"Error opening file", MessageBoxButtons.OK);
+							//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+							MessageBoxForm.msgIcon = SystemIcons.Error; //this is used if you want to add a system icon to the message form.
+							var messageBox = new MessageBoxForm("Can't find an editor to open this file type. (\"" + fileType + "\")",
+											"Error opening file", false, false);
+							messageBox.ShowDialog();
 						}
 						else {
 							_OpenEditor(editor);
@@ -389,12 +437,14 @@ namespace VixenApplication
 		private bool _CloseEditor(IEditorUserInterface editor)
 		{
 			if (editor.IsModified) {
-				DialogResult result = MessageBox.Show("Save changes to the sequence?", "Save Changes?",
-				                                      MessageBoxButtons.YesNoCancel);
-				if (result == System.Windows.Forms.DialogResult.Cancel)
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Error; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm("Save changes to the sequence?", "Save Changes?", true, true);
+				messageBox.ShowDialog();
+				if (messageBox.DialogResult == DialogResult.Cancel)
 					return false;
 
-				if (result == System.Windows.Forms.DialogResult.Yes)
+				if (messageBox.DialogResult == DialogResult.OK)
 					editor.Save();
 			}
 
@@ -456,13 +506,17 @@ namespace VixenApplication
 
 		private void OpenSequenceFromFile(string filename)
 		{
+			Cursor.Current = Cursors.WaitCursor;
 			try {
 				IEditorUserInterface editor = EditorService.Instance.CreateEditor(filename);
 
 				if (editor == null) {
 					Logging.Error("Can't find an appropriate editor to open file " + filename);
-					MessageBox.Show("Can't find an editor to open this file type. (\"" + Path.GetFileName(filename) + "\")",
-					                "Error opening file", MessageBoxButtons.OK);
+					//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+					MessageBoxForm.msgIcon = SystemIcons.Error; //this is used if you want to add a system icon to the message form.
+					var messageBox = new MessageBoxForm("Can't find an editor to open this file type. (\"" + Path.GetFileName(filename) + "\")",
+									"Error opening file", false, false);
+					messageBox.ShowDialog();
 				}
 				else {
 					_OpenEditor(editor);
@@ -470,7 +524,10 @@ namespace VixenApplication
 			}
 			catch (Exception ex) {
 				Logging.Error("Error trying to open file '" + filename + "': ", ex);
-				MessageBox.Show("Error trying to open file '" + filename + "'.", "Error opening file", MessageBoxButtons.OK);
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Error; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm("Error trying to open file '" + filename + "'.", "Error opening file", false, false);
+				messageBox.ShowDialog();
 			}
 		}
 
@@ -624,7 +681,10 @@ namespace VixenApplication
 				OpenSequenceFromFile(file);
 			}
 			else {
-				MessageBox.Show("Can't find selected sequence.");
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Error; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm("Can't find selected sequence.", "Error", false, false);
+				messageBox.ShowDialog();
 			}
 		}
 
@@ -678,11 +738,28 @@ namespace VixenApplication
 		private const int StatsUpdateInterval = 1000; // ms
 		private Timer _statsTimer;
 		private Process _thisProc;
+		private PerformanceCounter _committedRamCounter;
+		private PerformanceCounter _reservedRamCounter;
+		
 
 		private void InitStats()
 		{
 			_thisProc = Process.GetCurrentProcess();
 			_cpuUsage = new CpuUsage();
+
+			try
+			{
+				if (PerformanceCounterCategory.Exists(".NET CLR Memory"))
+				{
+					_committedRamCounter = new PerformanceCounter(".NET CLR Memory", "# Total committed Bytes", _thisProc.ProcessName);
+					_reservedRamCounter = new PerformanceCounter(".NET CLR Memory", "# Total reserved Bytes", _thisProc.ProcessName);
+					_perfCountersAvailable = true;
+				}
+			}
+			catch (Exception ex)
+			{
+				Logging.Error("Cannot access performance counters. Refresh the counter list with lodctr /R");
+			}
 
 			_statsTimer = new Timer();
 			_statsTimer.Interval = StatsUpdateInterval;
@@ -693,11 +770,25 @@ namespace VixenApplication
 
 		private void statsTimer_Tick(object sender, EventArgs e)
 		{
-			long memUsage = _thisProc.PrivateMemorySize64/1024/1024;
-			long sharedMem = _thisProc.VirtualMemorySize64/1024/1024;
+			long memUsage;
+			long reservedMemUsage;
+
+			if (_perfCountersAvailable)
+			{
+				memUsage = Convert.ToInt32(_committedRamCounter.NextValue()/1024/1024);
+				reservedMemUsage = Convert.ToInt32(_reservedRamCounter.NextValue()/1024/1024);
+			}
+			else
+			{
+				memUsage = _thisProc.PrivateMemorySize64 / 1024 / 1024;
+				reservedMemUsage = _thisProc.VirtualMemorySize64 / 1024 / 1024;
+			}
+
+			
+			
 
 			toolStripStatusLabel_memory.Text = String.Format("Mem: {0}/{2} MB   CPU: {1}%",
-			                                                 memUsage, _cpuUsage.GetUsage(), sharedMem);
+			                                                 memUsage, _cpuUsage.GetUsage(), reservedMemUsage);
 		}
 
 		#endregion
@@ -707,7 +798,10 @@ namespace VixenApplication
 			DataProfileForm f = new DataProfileForm();
 			if (f.ShowDialog() == System.Windows.Forms.DialogResult.OK) {
 				// Do something...
-				MessageBox.Show("You must re-start Vixen for the changes to take effect.", "Profiles Changed", MessageBoxButtons.OK);
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Information; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm("You must re-start Vixen for the changes to take effect.", "Profiles Changed", false, false);
+				messageBox.ShowDialog();
 			}
 		}
 
@@ -744,6 +838,34 @@ namespace VixenApplication
 		private void buttonSetupDisplay_Click(object sender, EventArgs e)
 		{
 			SetupDisplay();
+		}
+
+		private void groupBoxes_Paint(object sender, PaintEventArgs e)
+		{
+			ThemeGroupBoxRenderer.GroupBoxesDrawBorder(sender, e, Font);
+		}
+
+		private void VixenApplication_Paint(object sender, PaintEventArgs e)
+		{
+			//draws divider lines
+			Pen borderColor = new Pen(ThemeColorTable.GroupBoxBorderColor, 1);
+			if (ActiveForm != null)
+			{
+				e.Graphics.DrawLine(borderColor, 0, pictureBox1.Size.Height + 30, ActiveForm.Width, pictureBox1.Size.Height + 30);
+				e.Graphics.DrawLine(borderColor, 0, Height - (statusStrip.Height + 40), Width, Height - (statusStrip.Height + 40));
+			}
+		}
+
+		private void buttonBackground_MouseHover(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImageHover;
+		}
+
+		private void buttonBackground_MouseLeave(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImage;
 		}
 	}
 }

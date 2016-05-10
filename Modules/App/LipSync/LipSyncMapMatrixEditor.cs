@@ -6,11 +6,14 @@ using System.Drawing;
 using System.Windows.Forms;
 using System.Resources;
 using System.Reflection;
+using Common.Controls;
+using Common.Controls.Theme;
+using Common.Resources.Properties;
 using Vixen.Sys;
 
 namespace VixenModules.App.LipSyncApp
 {
-    public partial class LipSyncMapMatrixEditor : Form
+	public partial class LipSyncMapMatrixEditor : BaseForm
     {
         private static NLog.Logger Logging = NLog.LogManager.GetCurrentClassLogger();
         private LipSyncMapData _origMapping;
@@ -45,7 +48,15 @@ namespace VixenModules.App.LipSyncApp
 
         public LipSyncMapMatrixEditor(LipSyncMapData mapData)
         {
-            InitializeComponent();
+			Location = ActiveForm != null ? new Point(ActiveForm.Location.X - 150, ActiveForm.Location.Y - 100) : new Point(200, 100);
+			InitializeComponent();
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			ThemeUpdateControls.UpdateControls(this);
+			lipSyncMapColorCtrl1.BackColor = BackColor = ThemeColorTable.BackgroundColor;
+			lipSyncMapColorCtrl1.panelColor.BackColor = Color.White;
+	        zoomTrackbar.BackColor = ThemeColorTable.BackgroundColor;
+			Icon = Resources.Icon_Vixen3;
             LoadResourceBitmaps();
             dataTables = new Dictionary<PhonemeType, DataTable>();
             this.MapData = (LipSyncMapData)mapData.Clone();
@@ -520,6 +531,7 @@ namespace VixenModules.App.LipSyncApp
             dataGridView1.ClientSize = new Size(width + 2, height + 2);
 
             dataGridView1.Location = new Point(25, 150);
+			Refresh();
         }
 
         private void zoomTrackbar_ValueChanged(object sender, EventArgs e)
@@ -533,11 +545,12 @@ namespace VixenModules.App.LipSyncApp
         }
 
 
-        private void assignButton_Click(object sender, EventArgs e)
+        private void buttonAssign_Click(object sender, EventArgs e)
         {
             BuildMapDataFromDialog(); 
             assignNodes();
             updatedataGridView1();
+			Refresh();
         }
 
         private void assignNodes()
@@ -596,7 +609,7 @@ namespace VixenModules.App.LipSyncApp
             }
         }
 
-        private void importButton_Click(object sender, EventArgs e)
+        private void buttonImport_Click(object sender, EventArgs e)
         {
             OpenFileDialog fileDlg = new OpenFileDialog();
             fileDlg.Filter = "Image Files (*.bmp, *.jpg, *.png)|*.bmp;*.jpg;*.png|All Files(*.*)|*.*";
@@ -636,6 +649,7 @@ namespace VixenModules.App.LipSyncApp
 
                 BuildDialogFromMap(_newMapping);
                 updatedataGridView1();
+				Refresh();
             }
         }
 
@@ -649,7 +663,7 @@ namespace VixenModules.App.LipSyncApp
             PrevPhonemeIndex();
         }
 
-        private void exportButton_Click(object sender, EventArgs e)
+        private void buttonExport_Click(object sender, EventArgs e)
         {
             BuildMapDataFromDialog();
 
@@ -683,13 +697,31 @@ namespace VixenModules.App.LipSyncApp
                 }
                 rawBitmap.Save(fileDlg.FileName);
             }
+			Refresh();
         }
 
-        private void clearButton_Click(object sender, EventArgs e)
+        private void buttonClear_Click(object sender, EventArgs e)
         {
             currentDataTable = BuildBlankTable();
             updatedataGridView1();
             BuildMapDataFromDialog();
         }
-    }
+
+		private void buttonBackground_MouseHover(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImageHover;
+		}
+
+		private void buttonBackground_MouseLeave(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImage;
+		}
+
+		private void groupBoxes_Paint(object sender, PaintEventArgs e)
+		{
+			ThemeGroupBoxRenderer.GroupBoxesDrawBorder(sender, e, Font);
+		}
+	}
 }

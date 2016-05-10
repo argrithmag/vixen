@@ -36,7 +36,7 @@
 			this.timelineControl.AllowGridResize = true;
 			this.timelineControl.Audio = null;
 			this.timelineControl.AutoSize = true;
-			this.timelineControl.BorderStyle = System.Windows.Forms.BorderStyle.Fixed3D;
+			this.timelineControl.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
 			this.timelineControl.Dock = System.Windows.Forms.DockStyle.Fill;
 			this.timelineControl.Location = new System.Drawing.Point(0, 0);
 			this.timelineControl.Margin = new System.Windows.Forms.Padding(0);
@@ -53,7 +53,6 @@
 			this.CloseButton = false;
 			this.CloseButtonVisible = false;
 			this.Controls.Add(this.timelineControl);
-			this.Font = new System.Drawing.Font("Microsoft Sans Serif", 8.25F, System.Drawing.FontStyle.Regular, System.Drawing.GraphicsUnit.Point, ((byte)(0)));
 			this.Name = "Form_Grid";
 			this.Text = "Timeline";
 			this.ResumeLayout(false);

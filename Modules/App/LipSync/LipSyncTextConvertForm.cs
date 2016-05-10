@@ -6,11 +6,14 @@ using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
+using Common.Controls;
+using Common.Controls.Theme;
+using Common.Resources.Properties;
 using VixenModules.Sequence.Timed;
 
 namespace VixenModules.App.LipSyncApp
 {
-    public partial class LipSyncTextConvertForm : Form
+	public partial class LipSyncTextConvertForm : BaseForm
     {
         public event EventHandler<NewTranslationEventArgs> NewTranslation = null;
         public event EventHandler<TranslateFailureEventArgs> TranslateFailure = null;
@@ -21,6 +24,15 @@ namespace VixenModules.App.LipSyncApp
         public LipSyncTextConvertForm()
         {
             InitializeComponent();
+
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			ThemeUpdateControls.UpdateControls(this);
+			markCollectionLabel.ForeColor = Color.Gray;
+			markAlignmentLabel.ForeColor = Color.Gray;
+			markStartOffsetLabel.ForeColor = Color.Gray;
+			markCollectionRadio.ForeColor = Color.Gray;
+			Icon = Resources.Icon_Vixen3;
             unMarkedPhonemes = 0;
             _lastMarkIndex = -1;
         }
@@ -99,7 +111,10 @@ namespace VixenModules.App.LipSyncApp
 
             if (LipSyncTextConvert.StandardDictExists() == false)
             {
-                MessageBox.Show("Unable to find Standard Phoneme Dictionary", "Error", MessageBoxButtons.OK);
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Error; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm("Unable to find Standard Phoneme Dictionary", "Error", false, false);
+				messageBox.ShowDialog();
                 return;
             }
 
@@ -190,7 +205,7 @@ namespace VixenModules.App.LipSyncApp
 
         private void LipSyncTextConvert_Load(object sender, EventArgs e)
         {
-            convertButton.Enabled = false;
+            buttonConvert.Enabled = false;
             cursorRadio.Checked = true;
             setMarkControls(false);
         }
@@ -272,7 +287,7 @@ namespace VixenModules.App.LipSyncApp
                 }
             }
 
-            markCollectionRadio.Enabled = false;
+            markCollectionRadio.AutoCheck = false;
 
             if (markCollectionCombo.Items.Count > 0)
             {
@@ -293,14 +308,18 @@ namespace VixenModules.App.LipSyncApp
                 }
                 populateStartOffsetCombo();
 
-                markCollectionRadio.Enabled = 
+				markCollectionRadio.AutoCheck = 
                     (markCollectionCombo.Items.Count > 0) && (startOffsetCombo.Items.Count > 0);
+	            markCollectionRadio.ForeColor = markCollectionRadio.AutoCheck ? ThemeColorTable.ForeColor : Color.Gray;
             }
 
-            marksGroupBox.Enabled = enable;
-
+			
             if (enable)
             {
+				markCollectionCombo.Enabled = true;
+				startOffsetCombo.Enabled = true;
+				alignCombo.Enabled = true;
+
                 alignCombo.Items.Clear();
                 alignCombo.Items.Add("Phoneme");
                 alignCombo.Items.Add("Word");
@@ -309,6 +328,10 @@ namespace VixenModules.App.LipSyncApp
             }
             else
             {
+				markCollectionCombo.Enabled = false;
+				startOffsetCombo.Enabled = false;
+				alignCombo.Enabled = false;
+
                 markCollectionCombo.SelectedIndex = -1;
                 startOffsetCombo.SelectedIndex = -1;
             }
@@ -331,9 +354,38 @@ namespace VixenModules.App.LipSyncApp
 
         private void textBox_TextChanged(object sender, EventArgs e)
         {
-            convertButton.Enabled = !String.IsNullOrWhiteSpace(textBox.Text);
+            buttonConvert.Enabled = !String.IsNullOrWhiteSpace(textBox.Text);
         }
-    }
+
+		private void buttonBackground_MouseHover(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImageHover;
+		}
+
+		private void buttonBackground_MouseLeave(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImage;
+		}
+
+		private void groupBoxes_Paint(object sender, PaintEventArgs e)
+		{
+			ThemeGroupBoxRenderer.GroupBoxesDrawBorder(sender, e, Font);
+		}
+
+		private void markCollectionCombo_EnabledChanged(object sender, EventArgs e)
+		{
+			markCollectionLabel.ForeColor = markCollectionCombo.Enabled ? ThemeColorTable.ForeColor : Color.Gray;
+			markAlignmentLabel.ForeColor = markCollectionCombo.Enabled ? ThemeColorTable.ForeColor : Color.Gray;
+			markStartOffsetLabel.ForeColor = markCollectionCombo.Enabled ? ThemeColorTable.ForeColor : Color.Gray;
+		}
+
+		private void comboBox_DrawItem(object sender, DrawItemEventArgs e)
+		{
+			ThemeComboBoxRenderer.DrawItem(sender, e);
+		}
+	}
 
     public class LipSyncConvertData
     {

@@ -7,12 +7,14 @@ using System.Linq;
 using System.Text;
 using System.Windows.Forms;
 using System.Globalization;
+using Common.Controls;
+using Common.Controls.Theme;
 using VixenModules.Sequence.Timed;
 using Common.Resources.Properties;
 
 namespace VixenModules.Editor.TimedSequenceEditor
 {
-	public partial class Form_AddMultipleEffects : Form
+	public partial class Form_AddMultipleEffects : BaseForm
 	{
 		#region Member Variables
 
@@ -84,7 +86,6 @@ namespace VixenModules.Editor.TimedSequenceEditor
 		public bool AlignToBeatMarks { get { return checkBoxAlignToBeatMarks.Checked; } }
 		public bool FillDuration { get { return checkBoxFillDuration.Checked; }	}
 		public bool SelectEffects {	get { return checkBoxSelectEffects.Checked; } }
-		public bool EditEffects	{ get { return checkBoxEditEffects.Checked; } }
 		public bool SkipEOBeat { get { return checkBoxSkipEOBeat.Checked; } }
 
 		#endregion
@@ -94,10 +95,16 @@ namespace VixenModules.Editor.TimedSequenceEditor
 		public Form_AddMultipleEffects()
 		{
 			InitializeComponent();
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			listBoxMarkCollections.BackColor = ThemeColorTable.BackgroundColor;
+			checkBoxSkipEOBeat.ForeColor = checkBoxAlignToBeatMarks.Checked ? ThemeColorTable.ForeColor : ThemeColorTable.ForeColorDisabled;
+			checkBoxFillDuration.ForeColor = checkBoxAlignToBeatMarks.Checked ? ThemeColorTable.ForeColor : ThemeColorTable.ForeColorDisabled;
 			btnShowBeatMarkOptions.Image = Resources.bullet_toggle_plus;
 			btnShowBeatMarkOptions.Text = "";
 			btnHideBeatMarkOptions.Image = Resources.bullet_toggle_minus;
 			btnHideBeatMarkOptions.Text = "";
+			ThemeUpdateControls.UpdateControls(this);
 			panelBeatAlignment.Visible = false;
 		}
 
@@ -322,16 +329,22 @@ namespace VixenModules.Editor.TimedSequenceEditor
 		{
 			if (txtEffectCount.Value == 0)
 			{
-				MessageBox.Show("OOPS! Your effect count is set to 0 (zero)", "Warning", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
-				this.DialogResult = DialogResult.None;
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Exclamation; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm("OOPS! Your effect count is set to 0 (zero)", "Warning", false, false);
+				messageBox.ShowDialog();
+				DialogResult = DialogResult.None;
 			}
 			//Double check for calculations
 			if (!TimeExistsForAddition() && !checkBoxAlignToBeatMarks.Checked && !checkBoxFillDuration.Checked )
 			{
-				DialogResult proceedDialog = MessageBox.Show("At least one effect would be placed beyond the sequence length, and will not be added.\n\nWould you like to proceed anyway?", "Warning", MessageBoxButtons.YesNo, MessageBoxIcon.Exclamation);
-				if (proceedDialog == DialogResult.No)
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Exclamation; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm("At least one effect would be placed beyond the sequence length, and will not be added.\n\nWould you like to proceed anyway?", "Warning", true, false);
+				messageBox.ShowDialog();
+				if (messageBox.DialogResult == DialogResult.No)
 				{
-					this.DialogResult = DialogResult.None;
+					DialogResult = DialogResult.None;
 				}
 			}
 		}
@@ -339,7 +352,10 @@ namespace VixenModules.Editor.TimedSequenceEditor
 		private void checkBoxAlignToBeatMarks_CheckStateChanged(object sender, EventArgs e)
 		{
 			txtDurationBetween.Enabled = (checkBoxAlignToBeatMarks.Checked ? false : true);
-			listBoxMarkCollections.Enabled = checkBoxFillDuration.Enabled = checkBoxSkipEOBeat.Enabled = checkBoxAlignToBeatMarks.Checked;
+			listBoxMarkCollections.Visible = !listBoxMarkCollections.Visible;
+			listBoxMarkCollections.Enabled = checkBoxFillDuration.AutoCheck = checkBoxSkipEOBeat.AutoCheck = checkBoxAlignToBeatMarks.Checked;
+			checkBoxSkipEOBeat.ForeColor = checkBoxAlignToBeatMarks.Checked ? ThemeColorTable.ForeColor : ThemeColorTable.ForeColorDisabled;
+			checkBoxFillDuration.ForeColor = checkBoxAlignToBeatMarks.Checked ? ThemeColorTable.ForeColor : ThemeColorTable.ForeColorDisabled;
 			if (checkBoxAlignToBeatMarks.Checked)
 			{
 				CalculatePossibleEffectsByBeatMarks();
@@ -356,7 +372,10 @@ namespace VixenModules.Editor.TimedSequenceEditor
 				{
 					if (!names.Add(mc.Name))
 					{
-						MessageBox.Show("You have Beat Mark collections with duplicate names.\nBecause of this, your results may not be as expected.", "Duplicate Names", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+						//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+						MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+						var messageBox = new MessageBoxForm("You have Beat Mark collections with duplicate names.\nBecause of this, your results may not be as expected.", "Duplicate Names", false, false);
+						messageBox.ShowDialog();
 						break;
 					}
 				}
@@ -426,7 +445,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 				if (mc.Name != null)
 				{
 					var lvItems = new ListViewItem();
-					lvItems.BackColor = mc.MarkColor;
+					lvItems.ForeColor = mc.MarkColor;
 					lvItems.Text = mc.Name;
 					listBoxMarkCollections.Items.Add(lvItems);
 				}
@@ -493,5 +512,17 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 		#endregion
 
+		private void buttonBackground_MouseHover(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImageHover;
+		}
+
+		private void buttonBackground_MouseLeave(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImage;
+
+		}
 	}
 }

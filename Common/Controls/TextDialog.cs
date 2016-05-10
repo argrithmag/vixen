@@ -6,14 +6,19 @@ using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
+using Common.Controls.Theme;
+using Common.Resources.Properties;
 
 namespace Common.Controls
 {
-	public partial class TextDialog : Form
+	public partial class TextDialog : BaseForm
 	{
 		public TextDialog(string prompt)
 		{
 			InitializeComponent();
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			ThemeUpdateControls.UpdateControls(this);
 			labelPrompt.Text = prompt;
 		}
 
@@ -40,6 +45,19 @@ namespace Common.Controls
 		public string Response
 		{
 			get { return textBoxResponse.Text; }
+		}
+
+		private void buttonBackground_MouseHover(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.Properties.Resources.ButtonBackgroundImageHover;
+		}
+
+		private void buttonBackground_MouseLeave(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.Properties.Resources.ButtonBackgroundImage;
+
 		}
 	}
 }

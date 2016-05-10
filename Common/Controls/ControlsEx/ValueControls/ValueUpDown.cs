@@ -2,6 +2,7 @@ using System;
 using System.ComponentModel;
 using System.Drawing;
 using System.Windows.Forms;
+using Common.Controls.Theme;
 
 namespace Common.Controls.ControlsEx.ValueControls
 {
@@ -170,11 +171,12 @@ namespace Common.Controls.ControlsEx.ValueControls
 			#region textbox
 
 			this._textbox = new TextBox();
-			this._textbox.Size = new Size(this.Width - 32, 20);
-			this._textbox.Location = new Point(2, 4);
-			this._textbox.BorderStyle = BorderStyle.None;
+			this._textbox.Size = new Size(this.Width - 31, 20);
+			this._textbox.Location = new Point(2, 2);
+			this._textbox.BorderStyle = BorderStyle.FixedSingle;
 			this._textbox.Text = this.Minimum.ToString();
-			this._textbox.BackColor = Color.White;
+			this._textbox.BackColor = ThemeColorTable.TextBoxBackgroundColor;
+			this._textbox.ForeColor = ThemeColorTable.ForeColor;
 			this._textbox.MaxLength = 5;
 			this._textbox.KeyDown += new KeyEventHandler(_textbox_KeyDown);
 			this._textbox.KeyPress += new KeyPressEventHandler(_textbox_KeyPress);
@@ -190,7 +192,7 @@ namespace Common.Controls.ControlsEx.ValueControls
 
 			#endregion
 
-			this.Size = new Size(72, 25);
+			this.Size = new Size(72, 28);
 			this.SetStyle(ControlStyles.ResizeRedraw |
 						  ControlStyles.FixedHeight |
 						  ControlStyles.DoubleBuffer, true);
@@ -282,7 +284,7 @@ namespace Common.Controls.ControlsEx.ValueControls
 		// draws all elements
 		protected override void OnPaint(PaintEventArgs e)
 		{
-			e.Graphics.Clear(SystemColors.Control);
+			e.Graphics.Clear(ThemeColorTable.BackgroundColor);
 			if (this.Height < 24 || this.Width < 24) return;
 			IntPtr data = Win32.OpenThemeData2(this.Handle, "Combobox");
 			if (data != IntPtr.Zero) //draw with winxp themes
@@ -291,7 +293,7 @@ namespace Common.Controls.ControlsEx.ValueControls
 
 				#region background, dropdown button
 
-				Win32.RECT rct = new Win32.RECT(0, 0, this.Width, 22);
+				Win32.RECT rct = new Win32.RECT(0, 0, this.Width, this.Height);
 				Win32.DrawThemeBackground2(data, hdc, 0, _mouseentered ? 2 : 1, ref rct);
 				rct.Left = rct.Right - 15;
 				rct.Top += 2;

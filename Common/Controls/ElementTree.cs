@@ -7,6 +7,7 @@ using System.Linq;
 using System.Media;
 using System.Text;
 using System.Windows.Forms;
+using Common.Controls.Theme;
 using Vixen.Module.Property;
 using Vixen.Services;
 using Vixen.Sys;
@@ -27,6 +28,7 @@ namespace Common.Controls
 		{
 			InitializeComponent();
 
+			contextMenuStripTreeView.Renderer = new ThemeToolStripRenderer();
 			treeview.DragFinishing += treeviewDragFinishingHandler;
 			treeview.DragOverVerify += treeviewDragVerifyHandler;
 			treeview.DragStart += treeview_DragStart;
@@ -120,6 +122,14 @@ namespace Common.Controls
 
 				if (resultNode != null) {
 					treeview.AddSelectedNode(resultNode);
+					//ensure selected are visible
+					var parent = resultNode.Parent;
+					while (parent != null)
+					{
+						parent.Expand();
+						parent = parent.Parent;
+					}
+					
 				}
 			}
 
@@ -477,18 +487,30 @@ namespace Common.Controls
 			List<ElementNode> result = new List<ElementNode>();
 
 			// since we're adding multiple nodes, prompt with the name generation form (which also includes a counter on there).
-			using (NameGenerator nameGenerator = new NameGenerator()) {
-				if (nameGenerator.ShowDialog() == DialogResult.OK) {
-					result.AddRange(
-						nameGenerator.Names.Where(name => !string.IsNullOrEmpty(name)).Select(
-							name => AddNewNode(name, false, parent, true)));
-					if (result == null || result.Count() == 0) { 
-						MessageBox.Show("Could not create elements.  Ensure you use a valid name and try again.");
-						return result;
+
+			string newMultiName = "NewName";
+			if (treeview.SelectedNode != null)
+				newMultiName = treeview.SelectedNode.Text;
+			
+				using (NameGenerator nameGenerator = new NameGenerator(newMultiName))
+				{
+					if (nameGenerator.ShowDialog() == DialogResult.OK)
+					{
+						result.AddRange(
+							nameGenerator.Names.Where(name => !string.IsNullOrEmpty(name)).Select(
+								name => AddNewNode(name, false, parent, true)));
+						if (result == null || result.Count() == 0)
+						{
+							//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+							MessageBoxForm.msgIcon = SystemIcons.Error; //this is used if you want to add a system icon to the message form.
+							var messageBox = new MessageBoxForm("Could not create elements.  Ensure you use a valid name and try again.", "",
+								false, false);
+							messageBox.ShowDialog();
+							return result;
+						}
+						PopulateNodeTree(result.FirstOrDefault());
 					}
-					PopulateNodeTree(result.FirstOrDefault());
 				}
-			}
 
 			return result;
 		}
@@ -550,8 +572,12 @@ namespace Common.Controls
 					string message = "Adding items to this element will convert it into a Group, which will remove any " +
 					                 "patches it may have. Are you sure you want to continue?";
 					string title = "Convert Element to Group?";
-					DialogResult result = MessageBox.Show(message, title, MessageBoxButtons.YesNoCancel);
-					if (result != DialogResult.Yes) {
+					//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+					MessageBoxForm.msgIcon = SystemIcons.Question; //this is used if you want to add a system icon to the message form.
+					var messageBox = new MessageBoxForm(message, title, true, true);
+					messageBox.ShowDialog();
+					if (messageBox.DialogResult != DialogResult.OK)
+					{
 						return true;
 					}
 				}
@@ -613,9 +639,11 @@ namespace Common.Controls
 		private void contextMenuStripTreeView_Opening(object sender, CancelEventArgs e)
 		{
 			// temporarily disable Cut function till we can keep the underlying Elements around
+			//When this gets fixed enable the keydown event handler as well
 			cutNodesToolStripMenuItem.Enabled = false; // (SelectedTreeNodes.Count > 0);
 			copyNodesToolStripMenuItem.Enabled = (SelectedTreeNodes.Count > 0);
 			pasteNodesToolStripMenuItem.Enabled = (_clipboardNodes != null);
+			pasteAsNewToolStripMenuItem.Enabled = (_clipboardNodes != null);
 			copyPropertiesToolStripMenuItem.Enabled = (SelectedTreeNodes.Count == 1);
 			pastePropertiesToolStripMenuItem.Enabled = (SelectedTreeNodes.Count > 0) && (_clipboardProperties != null);
 			nodePropertiesToolStripMenuItem.Enabled = (SelectedTreeNodes.Count > 0);
@@ -633,9 +661,15 @@ namespace Common.Controls
 
 		private void cutNodesToolStripMenuItem_Click(object sender, EventArgs e)
 		{
+			CutNodesToClipboard();
+		}
+
+		private void CutNodesToClipboard()
+		{
 			List<ElementNode> cutNodes = new List<ElementNode>();
 
-			foreach (TreeNode treenode in SelectedTreeNodes) {
+			foreach (TreeNode treenode in SelectedTreeNodes)
+			{
 				cutNodes.Add(treenode.Tag as ElementNode);
 				DeleteNode(treenode);
 			}
@@ -648,9 +682,15 @@ namespace Common.Controls
 
 		private void copyNodesToolStripMenuItem_Click(object sender, EventArgs e)
 		{
+			CopyNodesToClipboard();
+		}
+
+		private void CopyNodesToClipboard()
+		{
 			List<ElementNode> copiedNodes = new List<ElementNode>();
 
-			foreach (TreeNode treenode in SelectedTreeNodes) {
+			foreach (TreeNode treenode in SelectedTreeNodes)
+			{
 				copiedNodes.Add(treenode.Tag as ElementNode);
 			}
 
@@ -658,6 +698,11 @@ namespace Common.Controls
 		}
 
 		private void pasteNodesToolStripMenuItem_Click(object sender, EventArgs e)
+		{
+			PasteNodes();
+		}
+
+		private void PasteNodes(bool pasteAsNew = false)
 		{
 			if (_clipboardNodes == null)
 				return;
@@ -667,33 +712,102 @@ namespace Common.Controls
 
 			if (selectedTreeNode != null)
 				destinationNode = selectedTreeNode.Tag as ElementNode;
-
-			IEnumerable<ElementNode> invalidNodesForTarget;
-			if (destinationNode == null)
-				invalidNodesForTarget = VixenSystem.Nodes.InvalidRootNodes;
-			else
-				invalidNodesForTarget = destinationNode.InvalidChildren();
-
-			IEnumerable<ElementNode> invalidSourceNodes = invalidNodesForTarget.Intersect(_clipboardNodes);
-            if (invalidSourceNodes.Any())
-            {
-				SystemSounds.Asterisk.Play();
-			}
-			else {
-				// Check to see if the new parent node would be 'losing' the Element (ie. becoming a
-				// group instead of a leaf node with a element/patches). Prompt the user first.
-				if (CheckAndPromptIfNodeWillLosePatches(destinationNode))
+			if (!pasteAsNew)
+			{
+				IEnumerable<ElementNode> invalidNodesForTarget;
+				if (destinationNode == null)
+				{
+					invalidNodesForTarget = VixenSystem.Nodes.InvalidRootNodes;
+				}
+				else
+				{
+					invalidNodesForTarget = destinationNode.InvalidChildren();
+				}
+				IEnumerable<ElementNode> invalidSourceNodes = invalidNodesForTarget.Intersect(_clipboardNodes);
+				if (invalidSourceNodes.Any())
+				{
+					SystemSounds.Hand.Play();
 					return;
+				}
+			}
+			else
+			{
+				if (destinationNode != null && destinationNode.IsLeaf)
+				{
+					SystemSounds.Hand.Play();
+					return;
+				}
+			}
+			
+			// Check to see if the new parent node would be 'losing' the Element (ie. becoming a
+			// group instead of a leaf node with a element/patches). Prompt the user first.
+			if (CheckAndPromptIfNodeWillLosePatches(destinationNode))
+				return;
 
-				foreach (ElementNode cn in _clipboardNodes) {
+			foreach (ElementNode cn in _clipboardNodes)
+			{
+				if (pasteAsNew)
+				{
+					DuplicateNodes(cn, destinationNode);
+				}
+				else
+				{
 					VixenSystem.Nodes.AddChildToParent(cn, destinationNode);
 				}
+			}
 
-				if (selectedTreeNode != null)
-					selectedTreeNode.Expand();
+			if (selectedTreeNode != null)
+				selectedTreeNode.Expand();
 
-				PopulateNodeTree();
-				OnElementsChanged();
+			PopulateNodeTree();
+			OnElementsChanged();
+			
+		}
+
+		private void pasteNodesAsNewToolStripMenuItem_Click(object sender, EventArgs e)
+		{
+			PasteNodes(true);
+
+		}
+
+		public void DuplicateNodes(ElementNode node, ElementNode parent = null)
+		{
+			//We need to make a map to ensure we can map all existing nodes back.
+			Dictionary<Guid, ElementNode> leafNodeMap = new Dictionary<Guid, ElementNode>();
+
+			//Create a new top level node
+			ElementNode newNode = ElementNodeService.Instance.CreateSingle(parent, node.Name,node.IsLeaf);
+			if (!node.IsLeaf)
+			{
+				DuplicateChildNodes(node, newNode, leafNodeMap);
+			}
+
+		}
+
+		private void DuplicateChildNodes(ElementNode node, ElementNode newNode, Dictionary<Guid, ElementNode> leafNodeMap)
+		{
+			foreach (ElementNode childNode in node.Children)
+			{
+				if (childNode.IsLeaf)
+				{
+					if (leafNodeMap.ContainsKey(childNode.Id))
+					{
+						VixenSystem.Nodes.AddChildToParent(leafNodeMap[childNode.Id],newNode);
+					}
+					else
+					{
+						ElementNode newChild = ElementNodeService.Instance.CreateSingle(newNode, childNode.Name);
+						leafNodeMap.Add(childNode.Id, newChild);
+					}
+				}
+				else
+				{
+					ElementNode newChild = ElementNodeService.Instance.CreateSingle(newNode, childNode.Name, false);
+					if (childNode.Children.Any())
+					{
+						DuplicateChildNodes(childNode, newChild, leafNodeMap);
+					}
+				}
 			}
 		}
 
@@ -787,16 +901,20 @@ namespace Common.Controls
 		private void treeview_KeyDown(object sender, KeyEventArgs e)
 		{
 			// do our own deleting of items here
-			if (e.KeyCode == Keys.Delete) {
-				if (SelectedTreeNodes.Count > 0) {
-					if (MessageBox.Show(
-						"Delete selected items?",
-						"Delete items",
-						MessageBoxButtons.YesNo,
-						MessageBoxIcon.Exclamation,
-						MessageBoxDefaultButton.Button1) == DialogResult.Yes)
+			if (e.KeyCode == Keys.Delete)
+			{
+				if (SelectedTreeNodes.Count > 0)
+				{
+					//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+					MessageBoxForm.msgIcon = SystemIcons.Exclamation;
+						//this is used if you want to add a system icon to the message form.
+					var messageBox = new MessageBoxForm("Delete selected items?",
+						"Delete items", true, false);
+					messageBox.ShowDialog();
+					if (messageBox.DialogResult == DialogResult.OK)
 					{
-						foreach (TreeNode tn in SelectedTreeNodes) {
+						foreach (TreeNode tn in SelectedTreeNodes)
+						{
 							DeleteNode(tn);
 						}
 
@@ -805,6 +923,27 @@ namespace Common.Controls
 					}
 				}
 			}
+			else if(e.KeyCode == Keys.C && e.Control)
+			{
+				CopyNodesToClipboard();
+				e.SuppressKeyPress = true;
+			}
+			else if (e.KeyCode == Keys.V && e.Control && e.Shift)
+			{
+				PasteNodes(true);
+				e.SuppressKeyPress = true;
+			}
+			else if (e.KeyCode == Keys.V && e.Control)
+			{
+				PasteNodes();
+				e.SuppressKeyPress = true;
+			}
+			// temporarily disable Cut function till we can keep the underlying Elements around
+			//else if (e.KeyCode == Keys.X && e.Control)
+			//{
+			//	CutNodesToClipboard();
+			//	e.SuppressKeyPress = true;
+			//}
 		}
 	}
 }

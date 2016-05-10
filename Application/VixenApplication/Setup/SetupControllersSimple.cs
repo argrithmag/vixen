@@ -7,6 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Windows.Forms;
 using Common.Controls;
+using Common.Controls.Theme;
 using Common.Resources.Properties;
 using Common.Resources;
 using Vixen.Data.Flow;
@@ -27,22 +28,25 @@ namespace VixenApplication.Setup
 		{
 			InitializeComponent();
 
-			buttonAddController.Image = Tools.GetIcon(Resources.add, 16);
+			buttonAddController.Image = Tools.GetIcon(Resources.add, 24);
 			buttonAddController.Text = "";
-			buttonConfigureController.Image = Tools.GetIcon(Resources.cog, 16);
+			buttonConfigureController.Image = Tools.GetIcon(Resources.cog, 24);
 			buttonConfigureController.Text = "";
-			buttonNumberChannelsController.Image = Tools.GetIcon(Resources.attributes_display, 16);
+			buttonNumberChannelsController.Image = Tools.GetIcon(Resources.attributes_display, 24);
 			buttonNumberChannelsController.Text = "";
-			buttonRenameController.Image = Tools.GetIcon(Resources.pencil, 16);
+			buttonRenameController.Image = Tools.GetIcon(Resources.pencil, 24);
 			buttonRenameController.Text = "";
-			buttonDeleteController.Image = Tools.GetIcon(Resources.delete, 16);
+			buttonDeleteController.Image = Tools.GetIcon(Resources.delete, 24);
 			buttonDeleteController.Text = "";
-			buttonSelectSourceElements.Image = Tools.GetIcon(Resources.table_select_row, 16);
+			buttonSelectSourceElements.Image = Tools.GetIcon(Resources.table_select_row, 24);
 			buttonSelectSourceElements.Text = "";
-			buttonStopController.Image = Tools.GetIcon(Resources.control_stop_blue, 16);
+			buttonStopController.Image = Tools.GetIcon(Resources.control_stop_blue, 24);
 			buttonStopController.Text = "";
-			buttonStartController.Image = Tools.GetIcon(Resources.control_play_blue, 16);
+			buttonStartController.Image = Tools.GetIcon(Resources.control_play_blue, 24);
 			buttonStartController.Text = "";
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			ThemeUpdateControls.UpdateControls(this);
 
 			comboBoxNewControllerType.BeginUpdate();
 			foreach (KeyValuePair<Guid, string> kvp in ApplicationServices.GetAvailableModules<IControllerModuleInstance>()) {
@@ -104,7 +108,8 @@ namespace VixenApplication.Setup
 
 			buttonSelectSourceElements.Enabled = controllerTree.SelectedTreeNodes.Count > 0;
 
-			if (selectedControllerCount <= 0) {
+			if (selectedControllerCount <= 0)
+			{
 				labelControllerType.Text = "";
 				labelOutputCount.Text = "";
 			} else if (selectedControllerCount == 1) {
@@ -310,6 +315,16 @@ namespace VixenApplication.Setup
 				OnControllersChanged();
 				UpdateForm();
 			}
+		}
+
+		private void groupBoxes_Paint(object sender, PaintEventArgs e)
+		{
+			ThemeGroupBoxRenderer.GroupBoxesDrawBorder(sender, e, Font);
+		}
+
+		private void comboBox_DrawItem(object sender, DrawItemEventArgs e)
+		{
+			ThemeComboBoxRenderer.DrawItem(sender, e);
 		}
 	}
 }

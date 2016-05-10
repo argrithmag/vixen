@@ -6,7 +6,7 @@ using Vixen.Sys;
 namespace Common.Controls.Timeline
 {
 	[Serializable]
-	public class Element : IComparable<Element>, ITimeRowLocation, IDisposable
+	public class Element : IComparable<Element>, ITimeRowLocation
 	{
 		private TimeSpan _startTime;
 		private TimeSpan _duration;
@@ -14,11 +14,12 @@ namespace Common.Controls.Timeline
 		private static readonly Color Gray = Color.FromArgb(122, 122, 122);
 		private static readonly Color BorderColor = Color.Black;
 		private bool _selected;
-		private static readonly Font TextFont = new Font("Arial", 7);
+		private static readonly Font TextFont = new Font(SystemFonts.MessageBoxFont.FontFamily, 7);
 		private static readonly Color TextColor = Color.FromArgb(255, 255, 255);
 		private static readonly Brush InfoBrush = new SolidBrush(Color.FromArgb(128,0,0,0));
 		protected internal bool SuspendEvents = false;
 		private Bitmap _cachedImage;
+		private Size _cachedImageSize= new Size(0,0);
 		private TimeSpan _elementVisibleStartTime;
 		private TimeSpan _elementVisibleEndTime;
 		
@@ -79,6 +80,11 @@ namespace Common.Controls.Timeline
 				}
 			}
 				
+		}
+
+		public void  UpdateNotifyContentChanged()
+		{
+			OnContentChanged();
 		}
 
 		#endregion
@@ -296,18 +302,31 @@ namespace Common.Controls.Timeline
 			// Draw it!
 			using (Pen border = new Pen(redBorder ? Color.Red : BorderColor,borderWidth))
 			{	
-				g.DrawLine(border, borderRectangle.Left, borderRectangle.Top, borderRectangle.Right, borderRectangle.Top);
-				g.DrawLine(border, borderRectangle.Left, borderRectangle.Bottom, borderRectangle.Right, borderRectangle.Bottom);
-
-				if (includeRight)
+				DrawBorder(g, includeLeft, includeRight, border, borderRectangle);
+				if (drawSelected)
 				{
-					g.DrawLine(border, borderRectangle.Right, borderRectangle.Top, borderRectangle.Right, borderRectangle.Bottom+1);
+					//border.DashCap = DashCap.Flat;
+					//border.DashStyle = DashStyle.Dot;
+					border.Width = 1;
+					border.DashPattern = new float[] { 1.0F, 2.0F};
+					border.Color = Color.FromArgb(221,221,221);
+					DrawBorder(g, includeLeft, includeRight, border, borderRectangle);
 				}
-				if (includeLeft)
-				{
-					g.DrawLine(border, borderRectangle.Left, borderRectangle.Top, borderRectangle.Left, borderRectangle.Bottom);
-				}	
-			
+			}
+		}
+
+		private static void DrawBorder(Graphics g, bool includeLeft, bool includeRight, Pen border, Rectangle borderRectangle)
+		{
+			g.DrawLine(border, borderRectangle.Left, borderRectangle.Top, borderRectangle.Right, borderRectangle.Top);
+			g.DrawLine(border, borderRectangle.Left, borderRectangle.Bottom, borderRectangle.Right, borderRectangle.Bottom);
+
+			if (includeRight)
+			{
+				g.DrawLine(border, borderRectangle.Right, borderRectangle.Top, borderRectangle.Right, borderRectangle.Bottom + 1);
+			}
+			if (includeLeft)
+			{
+				g.DrawLine(border, borderRectangle.Left, borderRectangle.Top, borderRectangle.Left, borderRectangle.Bottom);
 			}
 		}
 
@@ -359,17 +378,19 @@ namespace Common.Controls.Timeline
 			}
 
 			if (_cachedImage == null || visibleStartOffset != _elementVisibleStartTime || 
-				visibleEndOffset != _elementVisibleEndTime || _cachedImage.Height != imageSize.Height || 
-				_cachedImage.Width != imageSize.Width)
+				visibleEndOffset != _elementVisibleEndTime || _cachedImageSize.Height != imageSize.Height || 
+				_cachedImageSize.Width != imageSize.Width)
 			{
-				_cachedImage = new Bitmap(imageSize.Width, imageSize.Height);
-				using (Graphics g = Graphics.FromImage(_cachedImage))
+				var image = new Bitmap(imageSize.Width, imageSize.Height);
+				using (Graphics g = Graphics.FromImage(image))
 				{
 					DrawCanvasContent(g, visibleStartOffset, visibleEndOffset, overallWidth, redBorder);
 					AddSelectionOverlayToCanvas(g, _selected, startTime <= StartTime, endTime >= EndTime, redBorder);
 				}
 				_elementVisibleStartTime = visibleStartOffset;
 				_elementVisibleEndTime = visibleEndOffset;
+				_cachedImageSize = image.Size;
+				_cachedImage = image;
 			}
 			
 			return _cachedImage;
@@ -447,22 +468,6 @@ namespace Common.Controls.Timeline
 
 		#endregion
 
-		~Element()
-		{
-			Dispose(false);
-		}
-
-		protected void Dispose(bool disposing)
-		{
-			if (disposing) {
-				
-			}
-		}
-
-		public void Dispose()
-		{
-			Dispose(true);
-		}
 	}
 
 

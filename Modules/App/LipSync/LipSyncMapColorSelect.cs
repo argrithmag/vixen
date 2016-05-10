@@ -9,18 +9,25 @@ using System.Windows.Forms;
 using Common.Controls;
 using Common.Controls.ColorManagement.ColorModels;
 using Common.Controls.ColorManagement.ColorPicker;
+using Common.Controls.Theme;
+using Common.Resources.Properties;
 using Vixen.Module.Effect;
 using VixenModules.Property.Color;
 using Vixen.Sys;
 
 namespace VixenModules.App.LipSyncApp
 {
-    public partial class LipSyncMapColorSelect : Form
+	public partial class LipSyncMapColorSelect : BaseForm
     {
 
         public LipSyncMapColorSelect()
         {
-            InitializeComponent();
+			Location = ActiveForm != null ? new Point(ActiveForm.Location.X + 250, ActiveForm.Location.Y + 100) : new Point(500, 200);
+			InitializeComponent();
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			ThemeUpdateControls.UpdateControls(this);
+			Icon = Resources.Icon_Vixen3;
         }
 
 
@@ -83,5 +90,17 @@ namespace VixenModules.App.LipSyncApp
                 lipSyncMapColorCtrl1.Intensity = value;
             }
         }
+
+		private void buttonBackground_MouseHover(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImageHover;
+		}
+
+		private void buttonBackground_MouseLeave(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImage;
+		}
 	}
 }

@@ -6,14 +6,18 @@ using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
+using Common.Controls.Theme;
 
 namespace Common.Controls
 {
-	public partial class NumberDialog : Form
+	public partial class NumberDialog : BaseForm
 	{
 		public NumberDialog(string title, string prompt, int value, int minimum = 0, int maximum = int.MaxValue)
 		{
 			InitializeComponent();
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			ThemeUpdateControls.UpdateControls(this);
 			
 			numericUpDownChooser.Minimum = minimum;
 			numericUpDownChooser.Maximum = maximum;
@@ -34,6 +38,19 @@ namespace Common.Controls
 			} else if (e.KeyCode == Keys.Escape) {
 				DialogResult = DialogResult.Cancel;
 			}
+		}
+
+		private void buttonBackground_MouseHover(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.Properties.Resources.ButtonBackgroundImageHover;
+		}
+
+		private void buttonBackground_MouseLeave(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.Properties.Resources.ButtonBackgroundImage;
+
 		}
 	}
 }

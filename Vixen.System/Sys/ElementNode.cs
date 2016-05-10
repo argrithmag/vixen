@@ -34,6 +34,11 @@ namespace Vixen.Sys
 				VixenSystem.Nodes.SetElementNode(id, this);
 			}
 			Id = id;
+			if (element != null)
+			{
+				//Ensure the element name matches the ElementNode name as there is some code that expects that.
+				element.Name = name;
+			}
 			Element = element;
 			Properties = new PropertyManager(this);
 		}
@@ -256,6 +261,21 @@ namespace Vixen.Sys
 		public IEnumerable<ElementNode> GetAllParentNodes()
 		{
 			return Parents.Concat(Parents.SelectMany(x => x.GetAllParentNodes()));
+		}
+
+		public int GetMaxChildDepth()
+		{
+			return GetDepth(this);
+		}
+
+		private int GetDepth(ElementNode node)
+		{
+			if (node.IsLeaf)
+			{
+				return 1;
+			}
+			var subLevel = node.Children.Select(GetDepth);
+			return !subLevel.Any() ? 1 : subLevel.Max() + 1;
 		}
 
 		#endregion

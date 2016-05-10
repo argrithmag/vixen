@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.Globalization;
@@ -12,15 +13,18 @@ using System.Timers;
 using System.Windows.Forms;
 using System.Xml;
 using Common.Controls;
+using Common.Controls.ControlsEx.ValueControls;
+using Common.Controls.Theme;
 using Common.Controls.Timeline;
+using Common.Resources;
 using Common.Resources.Properties;
 using NLog;
 using Vixen;
 using Vixen.Cache.Sequence;
 using Vixen.Execution;
 using Vixen.Execution.Context;
-using Vixen.Module;
 using Vixen.Module.App;
+using VixenApplication;
 using VixenModules.App.Curves;
 using VixenModules.App.LipSyncApp;
 using VixenModules.Media.Audio;
@@ -34,6 +38,8 @@ using Vixen.Sys;
 using Vixen.Sys.State;
 using VixenModules.Analysis.BeatsAndBars;
 using VixenModules.App.ColorGradients;
+using VixenModules.Editor.EffectEditor;
+using VixenModules.Editor.TimedSequenceEditor.Undo;
 using VixenModules.Sequence.Timed;
 using WeifenLuo.WinFormsUI.Docking;
 using Element = Common.Controls.Timeline.Element;
@@ -43,7 +49,7 @@ using VixenModules.Property.Color;
 namespace VixenModules.Editor.TimedSequenceEditor
 {
 
-	public partial class TimedSequenceEditorForm : Form, IEditorUserInterface, ITiming
+	public partial class TimedSequenceEditorForm : BaseForm, IEditorUserInterface, ITiming
 	{
 
 		#region Member Variables
@@ -109,6 +115,12 @@ namespace VixenModules.Editor.TimedSequenceEditor
 		private static Random rnd = new Random();
 		private PreCachingSequenceEngine _preCachingSequenceEngine;
 
+		//Used for setting a mouse location to do repeat actions on.
+		private Point _mouseOriginalPoint = new Point(0,0);
+
+		//Used for the Align Effects to the nearest Mark.
+		private string AlignTo_Threshold;
+
 		#endregion
 
 		#region Constructor / Initialization
@@ -116,52 +128,64 @@ namespace VixenModules.Editor.TimedSequenceEditor
 		public TimedSequenceEditorForm()
 		{
 			InitializeComponent();
+
+			menuStrip.Renderer = new ThemeToolStripRenderer();
+			toolStripOperations.Renderer = new ThemeToolStripRenderer();
+			_contextMenuStrip.Renderer = new ThemeToolStripRenderer();
+			statusStrip.Renderer = new ThemeToolStripRenderer();
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			ThemeUpdateControls.UpdateControls(this);
+			cboAudioDevices.BackColor = ThemeColorTable.BackgroundColor;
+			cboAudioDevices.ForeColor = ThemeColorTable.ForeColor;
 			Icon = Resources.Icon_Vixen3;
-			toolStripButton_Start.Image = Resources.control_start_blue;
+			toolStripButton_Start.Image = Tools.GetIcon(Resources.control_start_blue,24);
 			toolStripButton_Start.DisplayStyle = ToolStripItemDisplayStyle.Image;
-			toolStripButton_Play.Image = Resources.control_play_blue;
+			toolStripButton_Play.Image = Tools.GetIcon(Resources.control_play_blue, 24);
 			toolStripButton_Play.DisplayStyle = ToolStripItemDisplayStyle.Image;
-			toolStripButton_Stop.Image = Resources.control_stop_blue;
+			toolStripButton_Stop.Image = Tools.GetIcon(Resources.control_stop_blue, 24);
 			toolStripButton_Stop.DisplayStyle = ToolStripItemDisplayStyle.Image;
-			toolStripButton_Pause.Image = Resources.control_pause_blue;
+			toolStripButton_Pause.Image = Tools.GetIcon(Resources.control_pause_blue, 24);
 			toolStripButton_Pause.DisplayStyle = ToolStripItemDisplayStyle.Image;
-			toolStripButton_End.Image = Resources.control_end_blue;
+			toolStripButton_End.Image = Tools.GetIcon(Resources.control_end_blue, 24);
 			toolStripButton_End.DisplayStyle = ToolStripItemDisplayStyle.Image;
-			toolStripButton_Loop.Image = Resources.arrow_repeat;
+			toolStripButton_Loop.Image = Tools.GetIcon(Resources.arrow_repeat, 24);
 			toolStripButton_Loop.DisplayStyle = ToolStripItemDisplayStyle.Image;
-			undoButton.Image = Resources.arrow_undo;
+			undoButton.Image =  Tools.GetIcon(Resources.arrow_undo, 24);
 			undoButton.DisplayStyle = ToolStripItemDisplayStyle.Image;
-			redoButton.Image = Resources.arrow_redo;
+			redoButton.Image =  Tools.GetIcon(Resources.arrow_redo, 24);
 			redoButton.DisplayStyle = ToolStripItemDisplayStyle.Image;
-			redoButton.ButtonType = UndoButtonType.RedoButton;
-			toolStripButton_Cut.Image = Resources.cut;
+			redoButton.ButtonType =  UndoButtonType.RedoButton;
+			toolStripButton_Cut.Image = Tools.GetIcon(Resources.cut, 24);
 			toolStripButton_Cut.DisplayStyle = ToolStripItemDisplayStyle.Image;
-			toolStripButton_Copy.Image = Resources.page_white_copy;
+			toolStripButton_Copy.Image = Tools.GetIcon(Resources.page_white_copy, 24);
 			toolStripButton_Copy.DisplayStyle = ToolStripItemDisplayStyle.Image;
-			toolStripButton_Paste.Image = Resources.page_white_paste;
+			toolStripButton_Paste.Image = Tools.GetIcon(Resources.page_white_paste, 24);
 			toolStripButton_Paste.DisplayStyle = ToolStripItemDisplayStyle.Image;
-			toolStripButton_AssociateAudio.Image = Resources.music;
+			toolStripButton_AssociateAudio.Image = Tools.GetIcon(Resources.music, 24);
 			toolStripButton_AssociateAudio.DisplayStyle = ToolStripItemDisplayStyle.Image;
-			toolStripButton_MarkManager.Image = Resources.timeline_marker;
+			toolStripButton_MarkManager.Image = Tools.GetIcon(Resources.timeline_marker, 24);
 			toolStripButton_MarkManager.DisplayStyle = ToolStripItemDisplayStyle.Image;
-			toolStripButton_ZoomTimeIn.Image = Resources.zoom_in;
+			toolStripButton_ZoomTimeIn.Image = Tools.GetIcon(Resources.zoom_in, 24);
 			toolStripButton_ZoomTimeIn.DisplayStyle = ToolStripItemDisplayStyle.Image;
-			toolStripButton_ZoomTimeOut.Image = Resources.zoom_out;
+			toolStripButton_ZoomTimeOut.Image = Tools.GetIcon(Resources.zoom_out, 24);
 			toolStripButton_ZoomTimeOut.DisplayStyle = ToolStripItemDisplayStyle.Image;
-			toolStripButton_SnapTo.Image = Resources.magnet;
+			toolStripButton_SnapTo.Image = Tools.GetIcon(Resources.magnet, 24);
 			toolStripButton_SnapTo.DisplayStyle = ToolStripItemDisplayStyle.Image;
-			toolStripButton_DrawMode.Image = Resources.pencil;
+			toolStripButton_DrawMode.Image = Tools.GetIcon(Resources.pencil, 24);
 			toolStripButton_DrawMode.DisplayStyle = ToolStripItemDisplayStyle.Image;
-			toolStripButton_SelectionMode.Image = Resources.cursor_arrow;
+			toolStripButton_SelectionMode.Image = Tools.GetIcon(Resources.cursor_arrow, 24);
 			toolStripButton_SelectionMode.DisplayStyle = ToolStripItemDisplayStyle.Image;
-			toolStripButton_DragBoxFilter.Image = Resources.table_select_big;
+			toolStripButton_DragBoxFilter.Image = Tools.GetIcon(Resources.table_select_big, 24);
 			toolStripButton_DragBoxFilter.DisplayStyle = ToolStripItemDisplayStyle.Image;
-			toolStripButton_IncreaseTimingSpeed.Image = Resources.plus;
+			toolStripButton_IncreaseTimingSpeed.Image = Tools.GetIcon(Resources.plus, 24);
 			toolStripButton_IncreaseTimingSpeed.DisplayStyle = ToolStripItemDisplayStyle.Image;
-			toolStripButton_DecreaseTimingSpeed.Image = Resources.minus;
+			toolStripButton_DecreaseTimingSpeed.Image = Tools.GetIcon(Resources.minus, 24);
 			toolStripButton_DecreaseTimingSpeed.DisplayStyle = ToolStripItemDisplayStyle.Image;
-			toolStripSplitButton_CloseGaps.Image = Resources.fill_gaps;
+			toolStripSplitButton_CloseGaps.Image = Tools.GetIcon(Resources.fill_gaps, 24);
 			toolStripSplitButton_CloseGaps.DisplayStyle = ToolStripItemDisplayStyle.Image;
+			toolStripDropDownButton_AlignTo.Image = Tools.GetIcon(Resources.alignment, 24);
+			toolStripDropDownButton_AlignTo.DisplayStyle = ToolStripItemDisplayStyle.Image;
 
 			foreach (ToolStripItem toolStripItem in toolStripDropDownButton_SnapToStrength.DropDownItems)
 			{
@@ -181,8 +205,18 @@ namespace VixenModules.Editor.TimedSequenceEditor
 				}
 			}
 
+			foreach (ToolStripItem toolStripItem in toolStripDropDownButton_AlignTo.DropDownItems)
+			{
+				var toolStripMenuItem = toolStripItem as ToolStripMenuItem;
+				if (toolStripMenuItem != null)
+				{
+					toolStripMenuItem.Click += toolStripDropDownButtonAlignToStrength_MenuItem_Click;
+				}
+			}
+
 			Execution.ExecutionStateChanged += OnExecutionStateChanged;
 			_autoSaveTimer.Tick += AutoSaveEventProcessor;
+
 
 		}
 
@@ -196,6 +230,8 @@ namespace VixenModules.Editor.TimedSequenceEditor
 				return MarksForm;
 			if (persistString == typeof (Form_ToolPalette).ToString())
 				return ToolsForm;
+			if (persistString == typeof(FormEffectEditor).ToString())
+				return EffectEditorForm;
 			
 			//Else
 			throw new NotImplementedException("Unable to find docking window type: " + persistString);
@@ -212,14 +248,21 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 			if (File.Exists(_settingsPath))
 			{
-				dockPanel.LoadFromXml(_settingsPath, DockingPanels_GetContentFromPersistString);
+				try
+				{
+					//Try to load the dock settings fro ma file. Somehow users manage to corrupt this file, so if it can be used
+					//Then just reconfigure to the defaults.
+					dockPanel.LoadFromXml(_settingsPath, DockingPanels_GetContentFromPersistString);
+				}
+				catch (Exception ex)
+				{
+					Logging.Error("Error loading dock panel config. Restoring to the default.", ex);
+					SetDockDefaults();
+				}
 			}
 			else
 			{
-				GridForm.Show(dockPanel, DockState.Document);
-				ToolsForm.Show(dockPanel, DockState.DockLeft);
-				MarksForm.Show(dockPanel, DockState.DockLeft);
-				EffectsForm.Show(dockPanel, DockState.DockLeft);
+				SetDockDefaults();
 			}
 
 			if (GridForm.IsHidden)
@@ -227,6 +270,11 @@ namespace VixenModules.Editor.TimedSequenceEditor
 				GridForm.DockState = DockState.Document;
 			}
 
+			if (EffectEditorForm.DockState == DockState.Unknown)
+			{
+				EffectEditorForm.Show(dockPanel, DockState.DockRight);
+			}
+				
 			XMLProfileSettings xml = new XMLProfileSettings();
 
 			//Get preferences
@@ -239,6 +287,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			toolStripButton_SnapTo.Checked = toolStripMenuItem_SnapTo.Checked = xml.GetSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/SnapToSelected", Name), true);
 			PopulateSnapStrength(xml.GetSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/SnapStrength", Name), 2));
 			TimelineControl.grid.CloseGap_Threshold = xml.GetSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/CloseGapThreshold", Name), ".100");
+			AlignTo_Threshold = xml.GetSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/AlignToThreshold", Name), ".800");
 			toolStripMenuItem_ResizeIndicator.Checked = xml.GetSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/ResizeIndicatorEnabled", Name), false);
 			toolStripButton_DrawMode.Checked = TimelineControl.grid.EnableDrawMode = xml.GetSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/DrawModeSelected", Name), false);
 			toolStripButton_SelectionMode.Checked = xml.GetSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/SelectionModeSelected", Name), true);
@@ -246,6 +295,9 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			ToolsForm.LinkGradients = xml.GetSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/ToolPaletteLinkGradients", Name), false);
 			cADStyleSelectionBoxToolStripMenuItem.Checked = TimelineControl.grid.aCadStyleSelectionBox = xml.GetSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/CadStyleSelectionBox", Name), false);
 			CheckRiColorMenuItem(xml.GetSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/ResizeIndicatorColor", Name), "Red"));
+			zoomUnderMousePositionToolStripMenuItem.Checked = xml.GetSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/ZoomUnderMousePosition", Name), false);
+			TimelineControl.waveform.Height = xml.GetSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/WaveFormHeight", Name), 50);
+			TimelineControl.ruler.Height = xml.GetSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/RulerHeight", Name), 50);
 
 			foreach (ToolStripItem toolStripItem in toolStripDropDownButton_SnapToStrength.DropDownItems)
 			{
@@ -273,27 +325,46 @@ namespace VixenModules.Editor.TimedSequenceEditor
 				}
 			}
 
+			foreach (ToolStripItem toolStripItem in toolStripDropDownButton_AlignTo.DropDownItems)
+			{
+				var toolStripMenuItem = toolStripItem as ToolStripMenuItem;
+				if (toolStripMenuItem != null)
+				{
+					if (AlignTo_Threshold.Equals(toolStripMenuItem.ToString()))
+					{
+						toolStripMenuItem.PerformClick();
+						break;
+					}
+				}
+			}
+
 			WindowState = FormWindowState.Normal;
 
-			if (xml.GetSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/WindowState", Name),
-				"Normal").Equals("Maximized"))
+			var desktopBounds =
+				new Rectangle(
+					new Point(
+						xml.GetSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/WindowLocationX", Name), Location.X),
+						xml.GetSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/WindowLocationY", Name), Location.Y)),
+					new Size(
+						xml.GetSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/WindowWidth", Name), Size.Width),
+						xml.GetSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/WindowHeight", Name), Size.Height)));
+			if (IsVisibleOnAnyScreen(desktopBounds))
 			{
-				WindowState = FormWindowState.Maximized;
+				StartPosition = FormStartPosition.Manual;
+				DesktopBounds = desktopBounds;
+
+				if (xml.GetSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/WindowState", Name), "Normal").Equals("Maximized"))
+				{
+					WindowState = FormWindowState.Maximized;
+				}
 			}
 			else
 			{
-				var desktopBounds =
-					new Rectangle(
-						new Point(
-							xml.GetSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/WindowLocationX", Name), Location.X),
-							xml.GetSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/WindowLocationY", Name), Location.Y)),
-						new Size(
-							xml.GetSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/WindowWidth", Name), Size.Width),
-							xml.GetSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/WindowHeight", Name), Size.Height)));
-				if (IsVisibleOnAnyScreen(desktopBounds))
-				{
-					DesktopBounds = desktopBounds;
-				}
+				// this resets the upper left corner of the window to windows standards
+				StartPosition = FormStartPosition.WindowsDefaultLocation;
+
+				// we can still apply the saved size
+				Size = new Size(desktopBounds.Width, desktopBounds.Height);
 			}
 
 			_effectNodeToElement = new Dictionary<EffectNode, Element>();
@@ -304,11 +375,8 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			TimelineControl.ElementChangedRows += ElementChangedRowsHandler;
 			TimelineControl.ElementsMovedNew += timelineControl_ElementsMovedNew;
 			TimelineControl.ElementDoubleClicked += ElementDoubleClickedHandler;
-			TimelineControl.DataDropped += timelineControl_DataDropped;
-			TimelineControl.ColorDropped += timelineControl_ColorDropped;
-			TimelineControl.CurveDropped += timelineControl_CurveDropped;
-			TimelineControl.GradientDropped += timelineControl_GradientDropped;
-
+			//TimelineControl.DataDropped += timelineControl_DataDropped;
+			
 			TimelineControl.PlaybackCurrentTimeChanged += timelineControl_PlaybackCurrentTimeChanged;
 
 			TimelineControl.RulerClicked += timelineControl_RulerClicked;
@@ -318,16 +386,6 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			TimelineControl.MarkMoved += timelineControl_MarkMoved;
 			TimelineControl.DeleteMark += timelineControl_DeleteMark;
 
-			EffectsForm.EscapeDrawMode += EscapeDrawMode;
-
-			MarksForm.MarkCollectionChecked += MarkCollection_Checked;
-			MarksForm.EditMarkCollection += MarkCollection_Edit;
-			MarksForm.ChangedMarkCollection += MarkCollection_Changed;
-
-			ToolsForm.StartColorDrag += ToolPalette_ColorDrag;
-			ToolsForm.StartCurveDrag += ToolPalette_CurveDrag;
-			ToolsForm.StartGradientDrag += ToolPalette_GradientDrag;
-
 			TimelineControl.SelectionChanged += TimelineControlOnSelectionChanged;
 			TimelineControl.grid.MouseDown += TimelineControl_MouseDown;
 			TimeLineSequenceClipboardContentsChanged += TimelineSequenceTimeLineSequenceClipboardContentsChanged;
@@ -336,8 +394,12 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			TimelineControl.ContextSelected += timelineControl_ContextSelected;
 			TimelineControl.SequenceLoading = false;
 			TimelineControl.TimePerPixelChanged += TimelineControl_TimePerPixelChanged;
+			TimelineControl.VisibleTimeStartChanged += TimelineControl_VisibleTimeStartChanged;
 			TimelineControl.grid.SelectedElementsCloneDelegate = CloneElements;
 			TimelineControl.grid.StartDrawMode += DrawElement;
+			TimelineControl.grid.DragOver += TimelineControlGrid_DragOver;
+			TimelineControl.grid.DragEnter += TimelineControlGrid_DragEnter;
+			TimelineControl.grid.DragDrop += TimelineControlGrid_DragDrop;
 
 			_curveLibrary = ApplicationServices.Get<IAppModuleInstance>(CurveLibraryDescriptor.ModuleID) as CurveLibrary;
 			if (_curveLibrary != null)
@@ -360,6 +422,15 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			LoadColorCollections();
 
 			_library = ApplicationServices.Get<IAppModuleInstance>(LipSyncMapDescriptor.ModuleID) as LipSyncMapLibrary;
+			Cursor.Current = Cursors.Default;
+			if (_sequence.DefaultSplitterDistance != 0)
+				TimelineControl.splitContainer.SplitterDistance = _sequence.DefaultSplitterDistance;
+
+			if (_sequence.DefaultPlaybackEndTime != TimeSpan.Zero)
+			{
+				_mPrevPlaybackStart = TimelineControl.PlaybackStartTime = _sequence.DefaultPlaybackStartTime;
+				_mPrevPlaybackEnd = TimelineControl.PlaybackEndTime = _sequence.DefaultPlaybackEndTime;
+			}
 
 #if DEBUG
 			ToolStripButton b = new ToolStripButton("[Debug Break]");
@@ -368,8 +439,17 @@ namespace VixenModules.Editor.TimedSequenceEditor
 #endif
 		}
 
+		private void SetDockDefaults()
+		{
+			GridForm.Show(dockPanel, DockState.Document);
+			ToolsForm.Show(dockPanel, DockState.DockLeft);
+			MarksForm.Show(dockPanel, DockState.DockLeft);
+			EffectsForm.Show(dockPanel, DockState.DockLeft);
+			EffectEditorForm.Show(dockPanel, DockState.DockRight);
+		}
 
-#if DEBUG
+
+#if DEBUGDataDropped
 		private void b_Click(object sender, EventArgs e)
 		{
 			//Debugger.Break();
@@ -403,10 +483,10 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			TimelineControl.ElementChangedRows -= ElementChangedRowsHandler;
 			TimelineControl.ElementsMovedNew -= timelineControl_ElementsMovedNew;
 			TimelineControl.ElementDoubleClicked -= ElementDoubleClickedHandler;
-			TimelineControl.DataDropped -= timelineControl_DataDropped;
-			TimelineControl.ColorDropped -= timelineControl_ColorDropped;
-			TimelineControl.CurveDropped -= timelineControl_CurveDropped;
-			TimelineControl.GradientDropped -= timelineControl_GradientDropped;
+			//TimelineControl.DataDropped -= timelineControl_DataDropped;
+			TimelineControl.grid.DragOver -= TimelineControlGrid_DragOver;
+			TimelineControl.grid.DragEnter -= TimelineControlGrid_DragEnter;
+			TimelineControl.grid.DragDrop -= TimelineControlGrid_DragDrop;
 
 			TimelineControl.PlaybackCurrentTimeChanged -= timelineControl_PlaybackCurrentTimeChanged;
 
@@ -416,17 +496,18 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			TimelineControl.MarkMoved -= timelineControl_MarkMoved;
 			TimelineControl.DeleteMark -= timelineControl_DeleteMark;
 
-			EffectsForm.EscapeDrawMode -= EscapeDrawMode;
-			EffectsForm.Dispose();
+			if (_effectsForm != null && !_effectsForm.IsDisposed)
+			{
+				EffectsForm.Dispose();
+			}
 
-			MarksForm.EditMarkCollection -= MarkCollection_Edit;
-			MarksForm.MarkCollectionChecked -= MarkCollection_Checked;
-			MarksForm.ChangedMarkCollection -= MarkCollection_Changed;
-			MarksForm.Dispose();
+			EffectEditorForm.Dispose();
 
-			ToolsForm.StartColorDrag -= ToolPalette_ColorDrag;
-			ToolsForm.StartCurveDrag -= ToolPalette_CurveDrag;
-			ToolsForm.StartGradientDrag -= ToolPalette_GradientDrag;
+			if (_marksForm != null && !_marksForm.IsDisposed)
+			{
+				_marksForm.Dispose();	
+			}
+			
 			ToolsForm.Dispose();
 
 			TimelineControl.SelectionChanged -= TimelineControlOnSelectionChanged;
@@ -436,7 +517,8 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			TimelineControl.ElementsSelected -= timelineControl_ElementsSelected;
 			TimelineControl.ContextSelected -= timelineControl_ContextSelected;
 			TimelineControl.TimePerPixelChanged -= TimelineControl_TimePerPixelChanged;
-			TimelineControl.DataDropped -= timelineControl_DataDropped;
+			TimelineControl.VisibleTimeStartChanged -= TimelineControl_VisibleTimeStartChanged;
+			//TimelineControl.DataDropped -= timelineControl_DataDropped;
 
 			Execution.ExecutionStateChanged -= OnExecutionStateChanged;
 			_autoSaveTimer.Stop();
@@ -452,7 +534,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 				_colorGradientLibrary.GradientChanged -= ColorGradientLibrary_CurveChanged;
 			}
 
-			//GRRR - make the color collections a library at some point
+			//GRRR - make the color collections a library at some mouseLocation
 
 			foreach (ToolStripItem toolStripItem in toolStripDropDownButton_SnapToStrength.DropDownItems)
 			{
@@ -494,19 +576,107 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			
 		}
 
-		private void ToolPalette_ColorDrag(object sender, EventArgs e)
+		private void TimelineControlGrid_DragDrop(object sender, DragEventArgs e)
 		{
-			TimelineControl.grid.isColorDrop = true;
+			Point p = new Point(e.X, e.Y);
+			//Check for effect drop
+			if (e.Data.GetDataPresent(typeof(Guid)))
+			{
+				Guid g = (Guid)e.Data.GetData(typeof(Guid));
+				EffectDropped(g,TimelineControl.grid.TimeAtPosition(p), TimelineControl.grid.RowAtPosition(p));
+			}
+
+			//Everything else applies to a element
+			Element element = TimelineControl.grid.ElementAtPosition(p);
+			if (element != null)
+			{
+				if (e.Data.GetDataPresent(typeof (ColorGradient)))
+				{
+					ColorGradient cg = (ColorGradient)e.Data.GetData(typeof (ColorGradient));
+					HandleGradientDrop(element, cg);
+				}
+				else if (e.Data.GetDataPresent(typeof (Curve)))
+				{
+					Curve curve = (Curve) e.Data.GetData(typeof (Curve));
+					HandleCurveDrop(element, curve);
+				}
+				else if (e.Data.GetDataPresent(typeof(Color)))
+				{
+					Color color = (Color)e.Data.GetData(typeof(Color));
+					HandleColorDrop(element, color);
+				}
+				
+			}
+			
 		}
 
-		private void ToolPalette_CurveDrag(object sender, EventArgs e)
+		private void TimelineControlGrid_DragEnter(object sender, DragEventArgs e)
 		{
-			TimelineControl.grid.isCurveDrop = true;
+			e.Effect = IsValidDataObject(e.Data, new Point(e.X, e.Y));
 		}
 
-		private void ToolPalette_GradientDrag(object sender, EventArgs e)
+		private void TimelineControlGrid_DragOver(object sender, DragEventArgs e)
 		{
-			TimelineControl.grid.isGradientDrop = true;
+			e.Effect = IsValidDataObject(e.Data, new Point(e.X, e.Y));
+		}
+
+		private DragDropEffects IsValidDataObject(IDataObject dataObject, Point mouseLocation)
+		{
+			if (dataObject.GetDataPresent(typeof(Guid)) && TimelineControl.grid.RowAtPosition(mouseLocation)!=null)
+			{
+				return DragDropEffects.Copy;
+			}
+			Element element = TimelineControl.grid.ElementAtPosition(mouseLocation);
+			if (element != null)
+			{
+
+				var propertyData = MetadataRepository.GetProperties(element.EffectNode.Effect);
+				if (dataObject.GetDataPresent(typeof(Color)) &&
+					propertyData.Any(x => (x.PropertyType == typeof(Color) || x.PropertyType == typeof(ColorGradient) || x.PropertyType == typeof(List<ColorGradient>) || x.PropertyType == typeof(List<GradientLevelPair>)) && x.IsBrowsable))
+				{
+					var discreteColors = GetDiscreteColors(element.EffectNode.Effect);
+					if (discreteColors.Any())
+					{
+						var c = (Color)dataObject.GetData(typeof(Color));
+						if (!discreteColors.Contains(c))
+						{
+							return DragDropEffects.None;
+						}
+					}
+					
+					return DragDropEffects.Copy;
+				}
+				if (dataObject.GetDataPresent(typeof(ColorGradient)) &&
+					propertyData.Any(x => (x.PropertyType == typeof(ColorGradient) || x.PropertyType == typeof(List<ColorGradient>) || x.PropertyType == typeof(List<GradientLevelPair>)) && x.IsBrowsable))
+				{
+					var discreteColors = GetDiscreteColors(element.EffectNode.Effect);
+					if (discreteColors.Any())
+					{
+						var c = (ColorGradient)dataObject.GetData(typeof(ColorGradient));
+						var colors = c.Colors.Select(x => x.Color.ToRGB().ToArgb());
+						if (!discreteColors.IsSupersetOf(colors))
+						{
+							return DragDropEffects.None;
+						}
+					}
+					return DragDropEffects.Copy;
+				}
+				if (dataObject.GetDataPresent(typeof(Curve)) &&
+					propertyData.Any(x => (x.PropertyType == typeof(Curve) || x.PropertyType == typeof(List<GradientLevelPair>)) && x.IsBrowsable))
+				{
+					return DragDropEffects.Copy;
+				}
+			}
+
+			return DragDropEffects.None;	
+		}
+
+		private HashSet<Color> GetDiscreteColors(IEffect effect)
+		{
+			var validColors = new HashSet<Color>();
+			validColors.AddRange(effect.TargetNodes.SelectMany(x => ColorModule.getValidColorsForElementNode(x, true)));
+	
+			return validColors;
 		}
 
 		private Form_Effects _effectsForm;
@@ -521,10 +691,13 @@ namespace VixenModules.Editor.TimedSequenceEditor
 				}
 				
 				_effectsForm = new Form_Effects(TimelineControl);
+				_effectsForm.EscapeDrawMode += EscapeDrawMode;
+				_effectsForm.Closing += _effectsForm_Closing;
 				return _effectsForm;
 			}
 		}
 
+		
 		private Form_Marks _marksForm;
 
 		private Form_Marks MarksForm
@@ -535,8 +708,14 @@ namespace VixenModules.Editor.TimedSequenceEditor
 				{
 					return _marksForm;
 				}
-				
-				_marksForm = new Form_Marks(TimelineControl);
+
+				_marksForm = new Form_Marks(TimelineControl) {Sequence = _sequence};
+				_marksForm.PopulateMarkCollectionsList(null);
+				_marksForm.MarkCollectionChecked += MarkCollection_Checked;
+				_marksForm.EditMarkCollection += MarkCollection_Edit;
+				_marksForm.ChangedMarkCollection += MarkCollection_Changed;
+				_marksForm.Closing += _marksForm_Closing;
+
 				return _marksForm;
 			}
 		}
@@ -557,9 +736,42 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			}
 		}
 
+		private FormEffectEditor _effectEditorForm;
+
+		private FormEffectEditor EffectEditorForm
+		{
+			get
+			{
+				if (_effectEditorForm != null && !_effectEditorForm.IsDisposed)
+				{
+					return _effectEditorForm;
+				}
+
+				_effectEditorForm = new FormEffectEditor(this);
+				return _effectEditorForm;
+			}
+		}
+
+		private void _marksForm_Closing(object sender, CancelEventArgs e)
+		{
+			MarksForm.MarkCollectionChecked -= MarkCollection_Checked;
+			MarksForm.EditMarkCollection -= MarkCollection_Edit;
+			MarksForm.ChangedMarkCollection -= MarkCollection_Changed;
+			MarksForm.Closing -= _marksForm_Closing;
+		}
+
+		private void _effectsForm_Closing(object sender, CancelEventArgs e)
+		{
+			EffectsForm.EscapeDrawMode -= EscapeDrawMode;
+			EffectsForm.Closing -= _effectsForm_Closing;
+		}
+
+
+
 		private void MarkCollection_Checked(object sender, MarkCollectionArgs e)
 		{
 			PopulateMarkSnapTimes();
+			SequenceModified();
 		}
 
 		private void MarkCollection_Edit(Object sender, EventArgs e)
@@ -569,6 +781,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 		private void MarkCollection_Changed(Object sender, MarkCollectionArgs e)
 		{
+			PopulateMarkSnapTimes();
 			SequenceModified();
 		}
 
@@ -579,7 +792,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			get { return _gridForm ?? (_gridForm = new Form_Grid()); }
 		}
 
-		private TimelineControl TimelineControl
+		internal TimelineControl TimelineControl
 		{
 			get { return _gridForm.TimelineControl; }
 		}
@@ -606,7 +819,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			{
 				//Populate Drag Box Filter drop down with effect types
 				ToolStripMenuItem dbfMenuItem = new ToolStripMenuItem(effectDesriptor.EffectName,
-					effectDesriptor.GetRepresentativeImage(48, 48));
+					effectDesriptor.GetRepresentativeImage(36, 36));
 				dbfMenuItem.CheckOnClick = true;
 				dbfMenuItem.CheckStateChanged += (sender, e) =>
 				{
@@ -634,7 +847,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 					if (destination != null)
 					{
 						AddNewEffectById((Guid) menuItem.Tag, destination, TimelineControl.CursorPosition,
-							TimeSpan.FromSeconds(2)); // TODO: get a proper time
+							TimeSpan.FromSeconds(2), true); // TODO: get a proper time
 					}
 				};
 				addEffectToolStripMenuItem.DropDownItems.Add(menuItem);
@@ -677,6 +890,10 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			TimelineControl.AllowGridResize = false;
 			_elementNodeToRows = new Dictionary<ElementNode, List<Row>>();
 
+			TimelineControl.rowHeight = _sequence.DefaultRowHeight;
+			if (TimelineControl.rowHeight == 0)
+				TimelineControl.rowHeight = 32;
+
 			if (clearCurrentRows)
 				TimelineControl.ClearAllRows();
 
@@ -684,6 +901,22 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			foreach (ElementNode node in VixenSystem.Nodes.GetRootNodes())
 			{
 				AddNodeAsRow(node, null);
+			}
+
+			//Expand groups based on save settings
+			foreach (Row row in TimelineControl.Rows)
+			{
+				if (_sequence.RowGuidId == null) continue;
+				foreach (var rowGuidId in _sequence.RowGuidId)
+				{
+					if (rowGuidId.Key != ((ElementNode) row.Tag).Id) continue;
+					row.TreeOpen = true;
+					if (row.ParentRow != null)
+					{
+						row.TreeOpen = true;
+						row.Visible = rowGuidId.Value;
+					}
+				}
 			}
 			TimelineControl.EnableDisableHandlers();
 
@@ -810,15 +1043,17 @@ namespace VixenModules.Editor.TimedSequenceEditor
 					SequenceNotModified();
 				}
 
-				MarksForm.Sequence = _sequence;
-				MarksForm.PopulateMarkCollectionsList(null);
-				PopulateMarkSnapTimes();
+				//PopulateMarkSnapTimes();
 
 				if (_sequence.TimePerPixel > TimeSpan.Zero)
 				{
 					TimelineControl.TimePerPixel = _sequence.TimePerPixel;
 				}
 
+				if (_sequence.VisibleTimeStart > TimeSpan.Zero)
+				{
+					TimelineControl.VisibleTimeStart = _sequence.VisibleTimeStart;
+				}
 
 
 				Logging.Debug("Sequence {0} took {1} to load.", sequence.Name, _loadingWatch.Elapsed);
@@ -873,7 +1108,9 @@ namespace VixenModules.Editor.TimedSequenceEditor
 								name = name + _sequence.FileExtension;
 								Logging.Info("TimedSequenceEditor: <SaveSequence> - Incorrect extension provided for timed sequence, appending one.");
 							}
+							SaveGridRowSettings();
 							_sequence.Save(name);
+							SetTitleBarText();
 						}
 						else
 						{
@@ -883,12 +1120,15 @@ namespace VixenModules.Editor.TimedSequenceEditor
 					}
 					else
 					{
+						SaveGridRowSettings();
 						_sequence.Save();
 					}
 				}
 				else
 				{
+					SaveGridRowSettings();
 					_sequence.Save(filePath);
+					SetTitleBarText();
 				}
 
 			}
@@ -898,6 +1138,37 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			}
 			
 			SequenceNotModified();
+		}
+
+		private void SaveGridRowSettings() //Adds Row and Grid settings to _sequence to be saved. 
+		{
+			_sequence.RowHeightSettings = new List<RowHeightSetting>();
+			_sequence.RowGuidId = new Dictionary<Guid, bool>();
+			//Add Default Row Height
+			_sequence.DefaultRowHeight = TimelineControl.rowHeight;
+			//Add Splitter Distance, the width of the RowList Column
+			_sequence.DefaultSplitterDistance = TimelineControl.DefaultSplitterDistance;
+			//Add Playback start and end time
+			_sequence.DefaultPlaybackStartTime = TimelineControl.PlaybackStartTime;
+			_sequence.DefaultPlaybackEndTime = TimelineControl.PlaybackEndTime;
+			//Adds the Row height settings for only those Rows that are not within the Default range
+			foreach (Row row in TimelineControl.Rows)
+			{
+				if (row.Height > TimelineControl.rowHeight + 7 || row.Height < TimelineControl.rowHeight - 7) //The 7 is the buffer size and will not save the Row Height if within 7 pixels. This is if a user manual adjusts the Row to matach the others (default height) and is a small amout off.
+				{
+					RowHeightSetting newRowHeightCollection = new RowHeightSetting { RowHeight = row.Height, RowName = row.Name };
+					_sequence.RowHeightSettings.Add(newRowHeightCollection);
+				}
+			}
+			//Adds the Expanded Groups for the Row List.
+			foreach (Row row in TimelineControl.Rows)
+			{
+				if (row.TreeOpen)
+				{
+					if (!_sequence.RowGuidId.Keys.Contains(((ElementNode)row.Tag).Id))
+						_sequence.RowGuidId.Add(((ElementNode)row.Tag).Id, row.Visible);
+				}
+			}
 		}
 
 		private void SaveColorCollections()
@@ -955,7 +1226,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 				{
 					foreach (TimeSpan time in mc.Marks)
 					{
-						TimelineControl.AddSnapTime(time, mc.Level, mc.MarkColor);
+						TimelineControl.AddSnapTime(time, mc.Level, mc.MarkColor, mc.Bold, mc.SolidLine);
 					}
 				}
 			}
@@ -1109,9 +1380,11 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 			if (modulesToRemove.Count > 0 && showWarning)
 			{
-				DialogResult result =
-					MessageBox.Show(@"Are you sure you want to remove the audio association?", @"Remove existing audio?", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-				if (result != DialogResult.Yes)
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Question; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm("Are you sure you want to remove the audio association?", "Remove existing audio?", true, false);
+				messageBox.ShowDialog();
+				if (messageBox.DialogResult != DialogResult.OK)
 					return;
 			}
 
@@ -1149,10 +1422,12 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 			if (modulesToRemove.Count > 0 && showWarning)
 			{
-				DialogResult result =
-					MessageBox.Show(@"Only one audio file can be associated with a sequence at a time. If you choose another, " +
-									@"the first will be removed. Continue?", @"Remove existing audio?", MessageBoxButtons.YesNo, MessageBoxIcon.Question);
-				if (result != DialogResult.Yes)
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm("Only one audio file can be associated with a sequence at a time. If you choose another, " +
+									@"the first will be removed. Continue?", @"Remove existing audio?", true, false);
+				messageBox.ShowDialog();
+				if (messageBox.DialogResult != DialogResult.OK)
 					return;
 			}
 
@@ -1165,7 +1440,10 @@ namespace VixenModules.Editor.TimedSequenceEditor
 				if (newInstance == null)
 				{
 					Logging.Warn(string.Format("Unsupported audio file {0}", openFileDialog.FileName));
-					MessageBox.Show(@"The selected file is not a supported type.");
+					//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+					MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+					var messageBox = new MessageBoxForm("The selected file is not a supported type.", @"Warning", false, false);
+					messageBox.ShowDialog();
 					return;
 				}
 
@@ -1196,8 +1474,12 @@ namespace VixenModules.Editor.TimedSequenceEditor
 					}
 					else if (_sequence.Length != length)
 					{
-						if (MessageBox.Show(@"Do you want to resize the sequence to the size of the audio?",
-											@"Resize sequence?", MessageBoxButtons.YesNo) == DialogResult.Yes)
+						//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+						MessageBoxForm.msgIcon = SystemIcons.Question; //this is used if you want to add a system icon to the message form.
+						var messageBox = new MessageBoxForm("Do you want to resize the sequence to the size of the audio?",
+											@"Resize sequence?", true, false);
+						messageBox.ShowDialog();
+						if (messageBox.DialogResult == DialogResult.OK)
 						{
 							SequenceLength = length;
 						}
@@ -1219,125 +1501,138 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 		//Switch statements are the best method at this time for these methods
 
+		private bool SupportsColor(Element element)
+		{
+			if (element == null) return false;
+			var propertyData = MetadataRepository.GetProperties(element.EffectNode.Effect);
+				
+			return propertyData.Any(x => (x.PropertyType == typeof(Color) || x.PropertyType == typeof(ColorGradient) || x.PropertyType == typeof(List<ColorGradient>) || x.PropertyType == typeof(List<GradientLevelPair>)) && x.IsBrowsable);
+				
+		}
+
+		private bool SupportsColorLists(Element element)
+		{
+			if (element == null) return false;
+			var propertyData = MetadataRepository.GetProperties(element.EffectNode.Effect);
+
+			return propertyData.Any(x => (x.PropertyType == typeof(List<ColorGradient>) || x.PropertyType == typeof(List<GradientLevelPair>)) && x.IsBrowsable);
+
+		}
+
+		private List<Color> GetSupportedColorsFromCollection(Element element, List<Color> colors )
+		{
+			var discreteColors = GetDiscreteColors(element.EffectNode.Effect);
+			if (discreteColors.Any())
+			{
+				return discreteColors.Intersect(colors).ToList();
+			}
+			return colors;
+		} 
+
+		private Color GetRandomColorFromCollection(List<Color> colors)
+		{
+			int item = rnd.Next(colors.Count());
+			return colors[item];
+		}
+
 		private void ApplyColorCollection(ColorCollection collection, bool randomOrder)
 		{
 			if (!collection.Color.Any())
 				return;
 
-			bool strayElement = false;
-			Color thisColor2 = Color.White;
-			int iPos = 0;
+			bool skipElements = false;
+			int index = 0;
 
 			foreach (Element elem in TimelineControl.SelectedElements)
 			{
-				string effectName = elem.EffectNode.Effect.EffectName;
-				object[] parms = new object[elem.EffectNode.Effect.ParameterValues.Count()];
-				List<Color> validColors = new List<Color>();
-
-				Array.Copy(elem.EffectNode.Effect.ParameterValues, parms, parms.Count());
-				validColors.AddRange(
-					elem.EffectNode.Effect.TargetNodes.SelectMany(x => ColorModule.getValidColorsForElementNode(x, true)));
-
-				Color thisColor;
-				if (randomOrder)
+				if (!SupportsColor(elem))
 				{
-					int r1 = rnd.Next(collection.Color.Count());
-					int r2 = rnd.Next(collection.Color.Count());
-
-					int n = 0;
-					while (r1 == r2 && n <= 5)
-					{
-						r2 = rnd.Next(collection.Color.Count());
-						n++;
-					}
-
-					thisColor = collection.Color[r1];
-					thisColor2 = collection.Color[r2];
+					skipElements = true;
+					continue;
 				}
-				else
-				{
-					if (iPos == collection.Color.Count())
-					{
-						iPos = 0;
-					}
-					thisColor = collection.Color[iPos];
-					iPos++;
-					if (effectName == "Alternating")
-					{
-						thisColor2 = collection.Color[iPos];
-						iPos++;
-					}
-				}
+				var colors = GetSupportedColorsFromCollection(elem, collection.Color);
+				
+				var properties = MetadataRepository.GetProperties(elem.EffectNode.Effect).Where(x => (x.PropertyType == typeof(Color) ||
+					x.PropertyType == typeof(ColorGradient) || x.PropertyType == typeof(List<ColorGradient>) || x.PropertyType == typeof(List<GradientLevelPair>)) && x.IsBrowsable);
 
-				if (validColors.Any() && !validColors.Contains(thisColor))
-				{
-					thisColor = validColors[rnd.Next(validColors.Count())];
-				}
+				Dictionary<Element, Tuple<Object, PropertyDescriptor>> elementValues = new Dictionary<Element, Tuple<object, PropertyDescriptor>>();
 
-				if (effectName == "Alternate")
+				foreach (var propertyData in properties)
 				{
-					if (validColors.Any() && !validColors.Contains(thisColor2))
+					
+					if (propertyData.PropertyType == typeof (Color))
 					{
-						thisColor2 = validColors[rnd.Next(validColors.Count())];
+						var color = randomOrder ? GetRandomColorFromCollection(colors) : colors[index++ % colors.Count];
+						elementValues.Add(elem,
+							new Tuple<object, PropertyDescriptor>(propertyData.Descriptor.GetValue(elem.EffectNode.Effect),
+								propertyData.Descriptor));
+						UpdateEffectProperty(propertyData.Descriptor, elem, color);
 					}
-
-					int n2 = 0;
-					while (thisColor2 == thisColor && n2 <= 5)
+					else
 					{
-						thisColor2 = validColors[rnd.Next(validColors.Count())];
-						n2++;
-					}
-				}
+						//The rest take a gradient.
+						if (propertyData.PropertyType == typeof(ColorGradient))
+						{
+							var color = randomOrder ? GetRandomColorFromCollection(colors) : colors[index++ % colors.Count];
+							elementValues.Add(elem,
+								new Tuple<object, PropertyDescriptor>(propertyData.Descriptor.GetValue(elem.EffectNode.Effect),
+									propertyData.Descriptor));
+							UpdateEffectProperty(propertyData.Descriptor, elem, new ColorGradient(color));
+						}
+						else if (propertyData.PropertyType == typeof(List<ColorGradient>))
+						{
+							var gradients = propertyData.Descriptor.GetValue(elem.EffectNode.Effect) as List<ColorGradient>;
+							if (gradients != null)
+							{
+								var newGradients = gradients.ToList();
+								for (int i = 0; i < newGradients.Count; i++)
+								{
+									newGradients[i] =
+										new ColorGradient(randomOrder ? GetRandomColorFromCollection(colors) : colors[index++ % colors.Count]);
+								}
+								elementValues.Add(elem,
+									new Tuple<object, PropertyDescriptor>(gradients,
+										propertyData.Descriptor));
+								UpdateEffectProperty(propertyData.Descriptor, elem, newGradients);
+							}
 
-				switch (effectName)
-				{
-					case "Candle Flicker":
-					case "LipSync":
-					case "Nutcracker":
-					case "Launcher":
-					case "RDS":
-						strayElement = true;
-						break;
-					case "Custom Value":
-						//Disabled until we fix the custom value null reference errors - not related to this.
-						//parms[0] = 4; //Set it to a type of color value
-						//parms[5] = thisColor;
-						strayElement = true;
-						break;
-					case "Alternating":
-						parms[1] = thisColor;
-						parms[3] = thisColor2;
-						parms[8] = parms[9] = true;
-						break;
-					case "Set Level":
-						parms[1] = thisColor;
-						break;
-					case "Pulse":
-						parms[1] = new ColorGradient(thisColor);
-						break;
-					case "Chase":
-						parms[0] = 0; // StaticColor
-						parms[3] = thisColor;
-						break;
-					case "Spin":
-						parms[2] = 0; // StaticColor
-						parms[9] = thisColor;
-						break;
-					case "Twinkle":
-						parms[7] = 0; // StaticColor
-						parms[8] = thisColor;
-						break;
-					case "Wipe":
-						parms[0] = new ColorGradient(thisColor);
-						break;
+						}
+						else if (propertyData.PropertyType == typeof(List<GradientLevelPair>))
+						{
+							var gradients = propertyData.Descriptor.GetValue(elem.EffectNode.Effect) as List<GradientLevelPair>;
+							if (gradients != null)
+							{
+								var newGradients = gradients.ToList();
+								for (int i = 0; i < newGradients.Count; i++)
+								{
+									newGradients[i] = new GradientLevelPair(new ColorGradient(randomOrder ? GetRandomColorFromCollection(colors) : colors[index++ % colors.Count]), new Curve(gradients[i].Curve));
+								}
+								elementValues.Add(elem,
+									new Tuple<object, PropertyDescriptor>(gradients,
+										propertyData.Descriptor));
+								UpdateEffectProperty(propertyData.Descriptor, elem, newGradients);
+							}
+
+						}
+
+					}
 				}
 
-				elem.EffectNode.Effect.ParameterValues = parms;
-				TimelineControl.grid.RenderElement(elem);
+				if (elementValues.Any())
+				{
+					var undo = new EffectsPropertyModifiedUndoAction(elementValues);
+					AddEffectsModifiedToUndo(undo);
+				}
+			}
+
+			if (skipElements)
+			{
+				MessageBoxForm.msgIcon = SystemIcons.Information; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm("One or more effects were selected that do not support colors.\nAll effects that do were updated.",
+									@"Information", true, false);
+				messageBox.ShowDialog();
 			}
 			SequenceModified();
-			if (strayElement)
-				MessageBox.Show(@"One or more effects were selected that do not support curves.\nAll effects that do were updated.");
 		}
 
 		#endregion
@@ -1528,11 +1823,21 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			if (elements == null)
 				return;
 
+			//Restrict the pop up editor to only Nutcracker effects for now. All other effects are supported by the new
+			//effect editor docker. This will be deprecated in some future version once the Nutcracker effects are converted
+			//to indivudual supported effects.
+			elementType = "Nutcracker";
+
 			IEnumerable<TimedSequenceElement> editElements;
 
 			editElements = elementType == null
 				? elements
 				: elements.Where(element => element.EffectNode.Effect.EffectName == elementType);
+
+			if (!editElements.Any())
+			{
+				return;
+			}
 
 			using (
 				TimedSequenceEditorEffectEditor editor = new TimedSequenceEditorEffectEditor(editElements.Select(x => x.EffectNode))
@@ -1543,7 +1848,8 @@ namespace VixenModules.Editor.TimedSequenceEditor
 				{
 					foreach (Element element in editElements)
 					{
-						TimelineControl.grid.RenderElement(element);
+						//TimelineControl.grid.RenderElement(element);
+						element.UpdateNotifyContentChanged();
 					}
 					SequenceModified();
 				}
@@ -1560,45 +1866,39 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 		}
 
+		private void TimelineControl_VisibleTimeStartChanged(object sender, EventArgs e)
+		{
+			if (_sequence.VisibleTimeStart != TimelineControl.VisibleTimeStart)
+			{
+				_sequence.VisibleTimeStart = TimelineControl.VisibleTimeStart;
+				SequenceModified();
+			}
+
+		}
+
 		private void timelineControl_ContextSelected(object sender, ContextSelectedEventArgs e)
 		{
 
 			_contextMenuStrip.Items.Clear();
 
-			if (TimelineControl.SelectedElements.Any())
+			ToolStripMenuItem contextMenuItemAddEffect = new ToolStripMenuItem("Add Effect(s)"){Image = Resources.effects};
+			IEnumerable<IEffectModuleDescriptor> effectDesriptors =
+				ApplicationServices.GetModuleDescriptors<IEffectModuleInstance>()
+					.Cast<IEffectModuleDescriptor>()
+					.OrderBy(x => x.EffectGroup)
+					.ThenBy(n => n.EffectName);
+			EffectGroups group = effectDesriptors.First().EffectGroup;
+			foreach (IEffectModuleDescriptor effectDesriptor in effectDesriptors)
 			{
-				//Build Edit Menu
-				ToolStripMenuItem contextMenuItemEditEffects = new ToolStripMenuItem("Edit Effect(s)");
-				contextMenuItemEditEffects.ShortcutKeyDisplayString = @"Ctrl+E";
-
-				if (TimelineControl.SelectedElementTypes.Count() > 1)
+				if (effectDesriptor.EffectGroup != group)
 				{
-					foreach (string effectType in TimelineControl.SelectedElementTypes)
-					{
-						ToolStripMenuItem toolStripMenuEditEffectType = new ToolStripMenuItem(effectType);
-						toolStripMenuEditEffectType.Click +=
-							(mySender, myE) => EditElements(TimelineControl.SelectedElements.Cast<TimedSequenceElement>(), effectType);
-						contextMenuItemEditEffects.DropDownItems.Add(toolStripMenuEditEffectType);
-					}
-
+					ToolStripSeparator seperator = new ToolStripSeparator();
+					contextMenuItemAddEffect.DropDownItems.Add(seperator);
+					group = effectDesriptor.EffectGroup;
 				}
-				else
-				{
-					contextMenuItemEditEffects.Click +=
-						(mySender, myE) => EditElements(TimelineControl.SelectedElements.Cast<TimedSequenceElement>());
-				}
-
-				_contextMenuStrip.Items.Add(contextMenuItemEditEffects);
-			}
-
-			ToolStripMenuItem contextMenuItemAddEffect = new ToolStripMenuItem("Add Effect(s)");
-
-			foreach (
-				IEffectModuleDescriptor effectDesriptor in
-					ApplicationServices.GetModuleDescriptors<IEffectModuleInstance>().Cast<IEffectModuleDescriptor>())
-			{
 				// Add an entry to the menu
 				ToolStripMenuItem contextMenuItemEffect = new ToolStripMenuItem(effectDesriptor.EffectName);
+				contextMenuItemEffect.Image = effectDesriptor.GetRepresentativeImage(48, 48);
 				contextMenuItemEffect.Tag = effectDesriptor.TypeId;
 				contextMenuItemEffect.ToolTipText = @"Use Shift key to add multiple effects of the same type.";
 				contextMenuItemEffect.Click += (mySender, myE) =>
@@ -1612,10 +1912,10 @@ namespace VixenModules.Editor.TimedSequenceEditor
 							AddMultipleEffects(e.GridTime, effectDesriptor.EffectName, (Guid) contextMenuItemEffect.Tag, e.Row);
 						}
 						else
-							AddNewEffectById((Guid) contextMenuItemEffect.Tag, e.Row, e.GridTime, TimeSpan.FromSeconds(2));
+							AddNewEffectById((Guid) contextMenuItemEffect.Tag, e.Row, e.GridTime, TimeSpan.FromSeconds(2), true);
 					}
 				};
-
+				
 				contextMenuItemAddEffect.DropDownItems.Add(contextMenuItemEffect);
 			}
 
@@ -1633,17 +1933,19 @@ namespace VixenModules.Editor.TimedSequenceEditor
 				//Effect Alignment Menu
 				ToolStripMenuItem contextMenuItemAlignment = new ToolStripMenuItem("Alignment")
 				{
-					Enabled = TimelineControl.grid.OkToUseAlignmentHelper(TimelineControl.SelectedElements)
+					Enabled = TimelineControl.grid.OkToUseAlignmentHelper(TimelineControl.SelectedElements),
+					Image = Resources.alignment
 				};
 				//Disables the Alignment menu if too many effects are selected in a row.
 				if (!contextMenuItemAlignment.Enabled)
 				{
-					contextMenuItemAlignment.ToolTipText = @"Disabled, maximum selected effects per row is 4.";
+					contextMenuItemAlignment.ToolTipText = @"Disabled, maximum selected effects per row is 32.";
 				}
 
 				ToolStripMenuItem contextMenuItemAlignStart = new ToolStripMenuItem("Align Start Times (shift)")
 				{
-					ToolTipText = @"Holding shift will align the start times, while holding duration."
+					ToolTipText = @"Holding shift will align the start times, while holding duration.",
+					Image = Resources.alignStart
 				};
 				contextMenuItemAlignStart.Click +=
 					(mySender, myE) =>
@@ -1651,13 +1953,14 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 				ToolStripMenuItem contextMenuItemAlignEnd = new ToolStripMenuItem("Align End Times (shift)")
 				{
-					ToolTipText = @"Holding shift will align the end times, while holding duration."
+					ToolTipText = @"Holding shift will align the end times, while holding duration.",
+					Image = Resources.alignEnd
 				};
 				contextMenuItemAlignEnd.Click +=
 					(mySender, myE) =>
 						TimelineControl.grid.AlignElementEndTimes(TimelineControl.SelectedElements, element, ModifierKeys == Keys.Shift);
 
-				ToolStripMenuItem contextMenuItemAlignBoth = new ToolStripMenuItem("Align Both Times");
+				ToolStripMenuItem contextMenuItemAlignBoth = new ToolStripMenuItem("Align Both Times") { Image = Resources.alignBoth };
 				contextMenuItemAlignBoth.Click +=
 					(mySender, myE) => TimelineControl.grid.AlignElementStartEndTimes(TimelineControl.SelectedElements, element);
 
@@ -1693,22 +1996,25 @@ namespace VixenModules.Editor.TimedSequenceEditor
 				ToolStripMenuItem contextMenuItemDistDialog = new ToolStripMenuItem("Distribute Effects");
 				contextMenuItemDistDialog.Click += (mySender, myE) => DistributeSelectedEffects();
 
-				ToolStripMenuItem contextMenuItemAlignCenter = new ToolStripMenuItem("Align Centerpoints");
+				ToolStripMenuItem contextMenuItemAlignCenter = new ToolStripMenuItem("Align Centerpoints") { Image = Resources.alignCenter };
 				contextMenuItemAlignCenter.Click +=
 					(mySender, myE) => TimelineControl.grid.AlignElementCenters(TimelineControl.SelectedElements, element);
 
 				ToolStripMenuItem contextMenuItemDistributeEqually = new ToolStripMenuItem("Distribute Equally")
 				{
 					ToolTipText =
-						@"This will stair step the selected elements, starting with the element that has the earlier start point on the time line."
+						@"This will stair step the selected elements, starting with the element that has the earlier start mouseLocation on the time line."
 				};
 				contextMenuItemDistributeEqually.Click += (mySender, myE) => DistributeSelectedEffectsEqually();
 
 				ToolStripMenuItem contextMenuItemAlignStartToMark = new ToolStripMenuItem("Align Start to nearest mark");
-				contextMenuItemAlignStartToMark.Click += (mySender, myE) => AlignEffectsToNearestMarks(true);
+				contextMenuItemAlignStartToMark.Click += (mySender, myE) => AlignEffectsToNearestMarks("Start");
 
 				ToolStripMenuItem contextMenuItemAlignEndToMark = new ToolStripMenuItem("Align End to nearest mark");
-				contextMenuItemAlignEndToMark.Click += (mySender, myE) => AlignEffectsToNearestMarks(false);
+				contextMenuItemAlignEndToMark.Click += (mySender, myE) => AlignEffectsToNearestMarks("End");
+
+				ToolStripMenuItem contextMenuItemAlignBothToMark = new ToolStripMenuItem("Align Both to nearest mark");
+				contextMenuItemAlignBothToMark.Click += (mySender, myE) => AlignEffectsToNearestMarks("Both");
 
 				_contextMenuStrip.Items.Add(contextMenuItemAlignment);
 				contextMenuItemAlignment.DropDown.Items.Add(contextMenuItemAlignStart);
@@ -1722,12 +2028,13 @@ namespace VixenModules.Editor.TimedSequenceEditor
 				contextMenuItemAlignment.DropDown.Items.Add(contextMenuItemDistDialog);
 				contextMenuItemAlignment.DropDown.Items.Add(contextMenuItemAlignStartToMark);
 				contextMenuItemAlignment.DropDown.Items.Add(contextMenuItemAlignEndToMark);
+				contextMenuItemAlignment.DropDown.Items.Add(contextMenuItemAlignBothToMark);
 
 				if (tse != null)
 				{
 					//Effect Manipulation Menu
 					ToolStripMenuItem contextMenuItemManipulation = new ToolStripMenuItem("Manipulation");
-					ToolStripMenuItem contextMenuItemManipulateDivide = new ToolStripMenuItem("Divide at cursor");
+					ToolStripMenuItem contextMenuItemManipulateDivide = new ToolStripMenuItem("Divide at cursor") { Image = Resources.divide };
 					contextMenuItemManipulateDivide.Click += (mySender, myE) =>
 					{
 						if (TimelineControl.SelectedElements.Any())
@@ -1743,7 +2050,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 					};
 
-					ToolStripMenuItem contextMenuItemManipulationClone = new ToolStripMenuItem("Clone");
+					ToolStripMenuItem contextMenuItemManipulationClone = new ToolStripMenuItem("Clone") { Image = Resources.page_copy };
 					contextMenuItemManipulationClone.Click += (mySender, myE) =>
 					{
 						if (TimelineControl.SelectedElements.Any())
@@ -1756,17 +2063,18 @@ namespace VixenModules.Editor.TimedSequenceEditor
 						}
 					};
 
-					ToolStripMenuItem contextMenuItemManipulationCloneToOther = new ToolStripMenuItem("Clone to selected effects");
+					ToolStripMenuItem contextMenuItemManipulationCloneToOther = new ToolStripMenuItem("Clone to selected effects") { Image = Resources.copySelect };
 					contextMenuItemManipulationCloneToOther.Click += (mySender, myE) =>
 					{
 						if (TimelineControl.SelectedElements.Any(elem => elem.EffectNode.Effect.TypeId != element.EffectNode.Effect.TypeId))
 						{
-							var dr = MessageBox.Show(
-								string.Format(
+							//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+							MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+							var messageBox = new MessageBoxForm(string.Format(
 									"Some of the selected effects are not of the same type, only effects of {0} type will be modified.",
-									element.EffectNode.Effect.EffectName), @"Multiple type effect selected", MessageBoxButtons.OKCancel,
-								MessageBoxIcon.Warning);
-							if (dr == DialogResult.Cancel) return;
+									element.EffectNode.Effect.EffectName), @"Multiple type effect selected", false, true);
+							messageBox.ShowDialog();
+							if (messageBox.DialogResult == DialogResult.Cancel) return;
 						}
 
 						foreach (
@@ -1785,7 +2093,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 					contextMenuItemManipulation.DropDown.Items.Add(contextMenuItemManipulationClone);
 					contextMenuItemManipulation.DropDown.Items.Add(contextMenuItemManipulationCloneToOther);
 
-					ToolStripMenuItem contextMenuItemEditTime = new ToolStripMenuItem("Edit Time");
+					ToolStripMenuItem contextMenuItemEditTime = new ToolStripMenuItem("Edit Time") { Image = Resources.clock_edit };
 					contextMenuItemEditTime.Click += (mySender, myE) =>
 					{
 						EffectTimeEditor editor = new EffectTimeEditor(tse.EffectNode.StartTime, tse.EffectNode.TimeSpan);
@@ -1806,7 +2114,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 					contextMenuItemEditTime.Tag = tse;
 					contextMenuItemEditTime.Enabled = TimelineControl.grid.OkToUseAlignmentHelper(TimelineControl.SelectedElements);
 					if (!contextMenuItemEditTime.Enabled)
-						contextMenuItemEditTime.ToolTipText = @"Disabled, maximum selected effects per row is 4.";
+						contextMenuItemEditTime.ToolTipText = @"Disabled, maximum selected effects per row is 32.";
 					_contextMenuStrip.Items.Add(contextMenuItemEditTime);
 
 				}
@@ -1819,16 +2127,18 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 			ToolStripMenuItem contextMenuItemCopy = new ToolStripMenuItem("Copy", null, toolStripMenuItem_Copy_Click)
 			{
-				ShortcutKeyDisplayString = @"Ctrl+C"
+				ShortcutKeyDisplayString = @"Ctrl+C",
+				Image = Resources.page_copy
 			};
 			ToolStripMenuItem contextMenuItemCut = new ToolStripMenuItem("Cut", null, toolStripMenuItem_Cut_Click)
 			{
-				ShortcutKeyDisplayString = @"Ctrl+X"
+				ShortcutKeyDisplayString = @"Ctrl+X",
+				Image = Resources.cut
 			};
 			contextMenuItemCopy.Enabled = contextMenuItemCut.Enabled = TimelineControl.SelectedElements.Any();
 			ToolStripMenuItem contextMenuItemPaste = new ToolStripMenuItem("Paste", null, toolStripMenuItem_Paste_Click)
 			{
-				ShortcutKeyDisplayString = @"Ctrl+V",
+				ShortcutKeyDisplayString = @"Ctrl+V", Image = Resources.page_copy,
 				Enabled = ClipboardHasData()
 			};
 
@@ -1838,11 +2148,16 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			{
 				//Add Delete/Collections
 				ToolStripMenuItem contextMenuItemDelete = new ToolStripMenuItem("Delete Effect(s)", null,
-					toolStripMenuItem_deleteElements_Click) {ShortcutKeyDisplayString = @"Del"};
+					toolStripMenuItem_deleteElements_Click) { ShortcutKeyDisplayString = @"Del", Image = Resources.delete };
 				_contextMenuStrip.Items.Add(contextMenuItemDelete);
 				AddContextCollectionsMenu();
 
 			}
+
+			ToolStripMenuItem contextMenuItemResetTimeLineSettings = new ToolStripMenuItem("Reset Timeline Settings"){ Image = Resources.Reset};
+			contextMenuItemResetTimeLineSettings.ToolTipText = "Resets TimeLine Start to Zero and Timeline Zoom to 14sec";
+			contextMenuItemResetTimeLineSettings.Click += (mySender, myE) => ResetTimeLineSettings();
+			_contextMenuStrip.Items.Add(contextMenuItemResetTimeLineSettings);
 
 			e.AutomaticallyHandleSelection = false;
 
@@ -1851,13 +2166,15 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 		private void AddContextCollectionsMenu()
 		{
-			ToolStripMenuItem contextMenuItemCollections = new ToolStripMenuItem("Collections");
+			ToolStripMenuItem contextMenuItemCollections = new ToolStripMenuItem("Collections") { Image = Resources.collection };
 
-			if (TimelineControl.SelectedElements.Count() > 1 && _colorCollections.Any())
+			if ((TimelineControl.SelectedElements.Count() > 1 
+				|| TimelineControl.SelectedElements.Count() == 1 && SupportsColorLists(TimelineControl.SelectedElements.FirstOrDefault())) 
+				&& _colorCollections.Any())
 			{
-				ToolStripMenuItem contextMenuItemColorCollections = new ToolStripMenuItem("Colors");
-				ToolStripMenuItem contextMenuItemRandomColors = new ToolStripMenuItem("Random");
-				ToolStripMenuItem contextMenuItemSequentialColors = new ToolStripMenuItem("Sequential");
+				ToolStripMenuItem contextMenuItemColorCollections = new ToolStripMenuItem("Colors") { Image = Resources.colors };
+				ToolStripMenuItem contextMenuItemRandomColors = new ToolStripMenuItem("Random") {Image = Resources.randomColors };
+				ToolStripMenuItem contextMenuItemSequentialColors = new ToolStripMenuItem("Sequential") { Image = Resources.sequentialColors };
 
 				contextMenuItemCollections.DropDown.Items.Add(contextMenuItemColorCollections);
 				contextMenuItemColorCollections.DropDown.Items.Add(contextMenuItemRandomColors);
@@ -2032,12 +2349,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 				}
 				if (newEffects.Count > 0)
 				{
-					if (eDialog.SelectEffects || eDialog.EditEffects) SelectEffectNodes(newEffects);
-					if (eDialog.EditEffects && TimelineControl.SelectedElements.Any())
-					{
-						EditElements(TimelineControl.SelectedElements.Cast<TimedSequenceElement>());
-					}
-
+					if (eDialog.SelectEffects) SelectEffectNodes(newEffects);
 				}
 			}
 		}
@@ -2098,7 +2410,9 @@ namespace VixenModules.Editor.TimedSequenceEditor
 		{
 			if (!TimelineControl.grid.OkToUseAlignmentHelper(TimelineControl.SelectedElements))
 			{
-				MessageBox.Show(TimelineControl.grid.alignmentHelperWarning);
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				var messageBox = new MessageBoxForm(TimelineControl.grid.alignmentHelperWarning, @"", false, false);
+				messageBox.ShowDialog();
 				return;
 			}
 
@@ -2127,10 +2441,12 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			//Sanity Check - Keep effects from becoming less than minimum.
 			if (effectDuration < .050)
 			{
-				MessageBox.Show(
-					string.Format(
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm(string.Format(
 						"Unable to complete request. The resulting duration would fall below 50 milliseconds.\nCalculated duration: {0}",
-						effectDuration), @"Warning", MessageBoxButtons.OK);
+						effectDuration), @"Warning", false, false);
+				messageBox.ShowDialog();
 				return;
 			}
 
@@ -2167,10 +2483,19 @@ namespace VixenModules.Editor.TimedSequenceEditor
 		{
 			if (!TimelineControl.grid.OkToUseAlignmentHelper(TimelineControl.SelectedElements))
 			{
-				MessageBox.Show(TimelineControl.grid.alignmentHelperWarning);
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				var messageBox = new MessageBoxForm(TimelineControl.grid.alignmentHelperWarning, @"", false, false);
+				messageBox.ShowDialog();
 				return;
 			}
 
+			if (TimelineControl.SelectedElements.Count() < 2)
+			{
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				var messageBox = new MessageBoxForm("Select at least two effects to distribute.", "Select more effects", false, false);
+				messageBox.ShowDialog();
+				return;
+			}
 			var startTime = TimelineControl.SelectedElements.First().StartTime;
 			var endTime = TimelineControl.SelectedElements.Last().EndTime;
 			if (startTime > endTime)
@@ -2263,8 +2588,11 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			}
 		}
 
+
+
 		private void timelineControl_ElementsSelected(object sender, ElementsSelectedEventArgs e)
 		{
+
 			if (e.ElementsUnderCursor != null && e.ElementsUnderCursor.Count() > 1)
 			{
 				contextMenuStripElementSelection.Items.Clear();
@@ -2331,7 +2659,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 				// Set the timeline control
 				TimelineControl.PlaybackStartTime = e.Time;
 				TimelineControl.PlaybackEndTime = null;
-
+				SequenceModified();
 				if (autoPlay)
 				{
 					_PlaySequence(e.Time, TimeSpan.MaxValue);
@@ -2346,7 +2674,11 @@ namespace VixenModules.Editor.TimedSequenceEditor
 				MarkCollection mc = null;
 				if (_sequence.MarkCollections.Count == 0)
 				{
-					if (MessageBox.Show(@"Marks are stored in Mark Collections. There are no mark collections available to store this mark. Would you like to create a new one?", @"Creat a Mark Collection", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+					//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+					MessageBoxForm.msgIcon = SystemIcons.Question; //this is used if you want to add a system icon to the message form.
+					var messageBox = new MessageBoxForm("Marks are stored in Mark Collections. There are no mark collections available to store this mark. Would you like to create a new one?", @"Create a Mark Collection", true, false);
+					messageBox.ShowDialog();
+					if (messageBox.DialogResult == DialogResult.OK)
 					{
 						mc = GetOrAddNewMarkCollection(Color.White, "Default Marks");
 						MarksForm.PopulateMarkCollectionsList(mc);
@@ -2357,7 +2689,10 @@ namespace VixenModules.Editor.TimedSequenceEditor
 					mc = MarksForm.SelectedMarkCollection;
 					if (mc == null)
 					{
-						MessageBox.Show(@"Please select a mark collection in the Mark Manager window before adding a new mark to the timeline.", @"New Mark", MessageBoxButtons.OKCancel, MessageBoxIcon.Error);
+						//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+						MessageBoxForm.msgIcon = SystemIcons.Error; //this is used if you want to add a system icon to the message form.
+						var messageBox = new MessageBoxForm("Please select a mark collection in the Mark Manager window before adding a new mark to the timeline.", @"New Mark", false, false);
+						messageBox.ShowDialog();
 					}
 				}
 				if (mc != null)
@@ -2496,7 +2831,10 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			if (_context == null)
 			{
 				Logging.Error(@"TimedSequenceEditor: <OpenSequenceContext> - null _context when attempting to play sequence!");
-				MessageBox.Show(@"Unable to play this sequence.  See error log for details.");
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Error; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm("Unable to play this sequence.  See error log for details.", @"Unable to Play", false, false);
+				messageBox.ShowDialog();
 				return;
 			}
 			TimelineControl.grid.Context = _context;
@@ -2527,10 +2865,10 @@ namespace VixenModules.Editor.TimedSequenceEditor
 				//MessageBox.Show("Starting delay");
 				_delayCountDown = (timerPostponePlay.Interval / 1000);
 				timerPostponePlay.Enabled = timerDelayCountdown.Enabled = true;
-				toolStripButton_Play.Image = Resources.hourglass;
+				toolStripButton_Play.Image = Tools.GetIcon(Resources.hourglass, 24);
 				//The Looping stuff kinda broke this, but we need to do this for consistency
 				toolStripButton_Play.Enabled = true;
-				playToolStripMenuItem.Enabled = EffectsForm.Enabled = false;
+				playToolStripMenuItem.Enabled = false;
 				toolStripButton_Stop.Enabled = stopToolStripMenuItem.Enabled = true;
 			}
 
@@ -2541,7 +2879,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			}
 
 			//Make sure the blue play icon is used & dissappear the delay countdown
-			toolStripButton_Play.Image = Resources.control_play_blue;
+			toolStripButton_Play.Image = Tools.GetIcon(Resources.control_play_blue, 24);
 			toolStripStatusLabel3.Visible = toolStripStatusLabel_delayPlay.Visible = false;
 
 			if (_context == null)
@@ -2568,7 +2906,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 		}
 
 		/// <summary>
-		/// Plays the sequence from the specified starting point in TimeSpan format
+		/// Plays the sequence from the specified starting mouseLocation in TimeSpan format
 		/// </summary>
 		/// <param name="startTime"></param>
 		public void PlaySequenceFrom(TimeSpan startTime)
@@ -2623,8 +2961,8 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			if (timerPostponePlay.Enabled)
 			{
 				timerPostponePlay.Enabled = timerDelayCountdown.Enabled = false;
-				toolStripButton_Play.Image = Resources.control_play_blue;
-				toolStripButton_Play.Enabled = playToolStripMenuItem.Enabled = EffectsForm.Enabled = true;
+				toolStripButton_Play.Image = Tools.GetIcon(Resources.control_play_blue, 24);
+				toolStripButton_Play.Enabled = playToolStripMenuItem.Enabled = true;
 				toolStripButton_Stop.Enabled = stopToolStripMenuItem.Enabled = false;
 				//We are stopping the delay, there is no context, so get out of here to avoid false entry into error log
 				return;
@@ -2668,6 +3006,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			TimelineControl.PlaybackStartTime = _mPrevPlaybackStart;
 			TimelineControl.PlaybackEndTime = _mPrevPlaybackEnd;
 			TimelineControl.PlaybackCurrentTime = null;
+			EffectEditorForm.ResumePreview();
 		}
 
 		protected void timerPlaying_Tick(object sender, EventArgs e)
@@ -2716,7 +3055,6 @@ namespace VixenModules.Editor.TimedSequenceEditor
 					toolStripButton_Play.Enabled = playToolStripMenuItem.Enabled = false;
 					toolStripButton_Pause.Enabled = pauseToolStripMenuItem.Enabled = false;
 					toolStripButton_Stop.Enabled = stopToolStripMenuItem.Enabled = false;
-					EffectsForm.Enabled = false;
 					return;
 				}
 
@@ -2733,14 +3071,12 @@ namespace VixenModules.Editor.TimedSequenceEditor
 						toolStripButton_Pause.Enabled = pauseToolStripMenuItem.Enabled = true;
 					}
 					toolStripButton_Stop.Enabled = stopToolStripMenuItem.Enabled = true;
-					EffectsForm.Enabled = false;
 				}
 				else // Stopped
 				{
 					toolStripButton_Play.Enabled = playToolStripMenuItem.Enabled = true;
 					toolStripButton_Pause.Enabled = pauseToolStripMenuItem.Enabled = false;
 					toolStripButton_Stop.Enabled = stopToolStripMenuItem.Enabled = false;
-					EffectsForm.Enabled = true;
 				}
 			}
 		}
@@ -2827,12 +3163,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 		private void SelectEffectNodes(IEnumerable<EffectNode> nodes)
 		{
 			TimelineControl.grid.ClearSelectedElements();
-
-			foreach (EffectNode element in nodes)
-			{
-				TimedSequenceElement tse = (TimedSequenceElement)_effectNodeToElement[element];
-				tse.Selected = true;
-			}
+			TimelineControl.grid.SelectElements(nodes.Select(x => _effectNodeToElement[x]));
 		}
 		
 		/// <summary>
@@ -2844,17 +3175,28 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			//Debug.WriteLine("{0}   RemoveEffectNodeAndElement(InstanceId={1})", (int)DateTime.Now.TimeOfDay.TotalMilliseconds, node.Effect.InstanceId);
 
 			// Lookup this effect node's Timeline Element
-			TimedSequenceElement tse = (TimedSequenceElement)_effectNodeToElement[node];
+			if (_effectNodeToElement.ContainsKey(node))
+			{
+				TimedSequenceElement tse = (TimedSequenceElement) _effectNodeToElement[node];
 
-			foreach (Row row in TimelineControl) // Remove the element from all rows
-				row.RemoveElement(tse);
+				foreach (Row row in TimelineControl) // Remove the element from all rows
+					row.RemoveElement(tse);
 
-			// TODO: Unnecessary?
-			tse.ContentChanged -= ElementContentChangedHandler; // Unregister event handlers
-			tse.TimeChanged -= ElementTimeChangedHandler;
+				// TODO: Unnecessary?
+				tse.ContentChanged -= ElementContentChangedHandler; // Unregister event handlers
+				tse.TimeChanged -= ElementTimeChangedHandler;
 
-			_effectNodeToElement.Remove(node); // Remove the effect node from the map
-			_sequence.RemoveData(node); // Remove the effect node from sequence
+				_effectNodeToElement.Remove(node); // Remove the effect node from the map
+				_sequence.RemoveData(node); // Remove the effect node from sequence
+			}
+			else
+			{
+				Logging.Error("Missing node on remove attempt in RemoveEffectNodeAndElement.");
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Error; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm("Node to remove not found, the editor is in a bad state! Please close the editor and restart it.", "Error", false, false);
+				messageBox.ShowDialog();
+			}
 		}
 
 
@@ -2865,13 +3207,14 @@ namespace VixenModules.Editor.TimedSequenceEditor
 		/// <param name="row">The Common.Controls.Timeline.Row to add the effect to</param>
 		/// <param name="startTime">The start time of the effect</param>
 		/// <param name="timeSpan">The duration of the effect</param>
-		private void AddNewEffectById(Guid effectId, Row row, TimeSpan startTime, TimeSpan timeSpan)
+		/// <param name="select">Optional indicator to set as the sole selection in the timeline</param>
+		private void AddNewEffectById(Guid effectId, Row row, TimeSpan startTime, TimeSpan timeSpan, bool select=false)
 		{
 			//Debug.WriteLine("{0}   addNewEffectById({1})", (int)DateTime.Now.TimeOfDay.TotalMilliseconds, effectId);
 			// get a new instance of this effect, populate it, and make a node for it
 
 			IEffectModuleInstance effect = ApplicationServices.Get<IEffectModuleInstance>(effectId);
-			AddEffectInstance(effect, row, startTime, timeSpan);
+			AddEffectInstance(effect, row, startTime, timeSpan, select);
 		}
 
 		/// <summary>
@@ -2882,8 +3225,8 @@ namespace VixenModules.Editor.TimedSequenceEditor
 		/// <param name="row">Common.Controls.Timeline.Row to add the effect instance to</param>
 		/// <param name="startTime">The start time of the effect</param>
 		/// <param name="timeSpan">The duration of the effect</param>
-		/// <param name="parameterValues">Optional ParameterValues</param>
-		private void AddEffectInstance(IEffectModuleInstance effectInstance, Row row, TimeSpan startTime, TimeSpan timeSpan, object[] parameterValues = null)
+		/// <param name="select">Optional indicator to set as the sole selection in the timeline</param>
+		private void AddEffectInstance(IEffectModuleInstance effectInstance, Row row, TimeSpan startTime, TimeSpan timeSpan, bool select = false)
 		{
 			try
 			{
@@ -2895,10 +3238,13 @@ namespace VixenModules.Editor.TimedSequenceEditor
 				}
 
 				var effectNode = CreateEffectNode(effectInstance, row, startTime, timeSpan);
-				// set the option parametervalues if not null
-				if (parameterValues != null) effectNode.Effect.ParameterValues = parameterValues;
 				// put it in the sequence and in the timeline display
-				AddEffectNode(effectNode);
+				Element element = AddEffectNode(effectNode);
+				if (select)
+				{
+					TimelineControl.grid.ClearSelectedElements();
+					TimelineControl.SelectElement(element);
+				}
 				SequenceModified();
 
 				var act = new EffectsAddedUndoAction(this, new[] { effectNode });
@@ -2964,7 +3310,10 @@ namespace VixenModules.Editor.TimedSequenceEditor
 						// dunno what we want to do: prompt to add new elements for them? map them to others? etc.
 						const string message = "TimedSequenceEditor: <AddElementsForEffectNodes> - No Timeline.Row is associated with a target ElementNode for this EffectNode. It now exists in the sequence, but not in the GUI.";
 						Logging.Error(message);
-						MessageBox.Show(message);
+						//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+						MessageBoxForm.msgIcon = SystemIcons.Error; //this is used if you want to add a system icon to the message form.
+						var messageBox = new MessageBoxForm(message, @"", false, false);
+						messageBox.ShowDialog();
 					}
 				}
 			}
@@ -3009,7 +3358,10 @@ namespace VixenModules.Editor.TimedSequenceEditor
 									// dunno what we want to do: prompt to add new elements for them? map them to others? etc.
 									const string message = "TimedSequenceEditor: <AddElementForEffectNodeTpl> - No Timeline.Row is associated with a target ElementNode for this EffectNode. It now exists in the sequence, but not in the GUI.";
 									Logging.Error(message);
-									MessageBox.Show(message);
+									//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+									MessageBoxForm.msgIcon = SystemIcons.Error; //this is used if you want to add a system icon to the message form.
+									var messageBox = new MessageBoxForm(message, @"", false, false);
+									messageBox.ShowDialog();
 								}
 							});
 			TimelineControl.grid.RenderElement(element);
@@ -3059,7 +3411,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			{
 				RemoveEffectNodeAndElement(elem.EffectNode);
 			}
-
+			TimelineControl.grid.ClearSelectedElements();
 			SequenceModified();
 		}
 
@@ -3076,7 +3428,8 @@ namespace VixenModules.Editor.TimedSequenceEditor
 		{
 			// made the new row from the given node and add it to the control.
 			TimedSequenceRowLabel label = new TimedSequenceRowLabel {Name = node.Name};
-			Row newRow = TimelineControl.AddRow(label, parentRow, 32);
+			
+			Row newRow = TimelineControl.AddRow(label, parentRow, TimelineControl.rowHeight);
 			newRow.ElementRemoved += ElementRemovedFromRowHandler;
 			newRow.ElementAdded += ElementAddedToRowHandler;
 
@@ -3098,6 +3451,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			foreach (ElementNode child in node.Children)
 			{
 				AddNodeAsRow(child, newRow);
+				
 			}
 		}
 
@@ -3105,20 +3459,23 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 		#region Effect & Preset Library Drag/Drop
 
-		private void timelineControl_DataDropped(object sender, TimelineDropEventArgs e)
+		private void EffectDropped(Guid effectGuid, TimeSpan startTime, Row row)
 		{
 			//Modified 12-3-2014 to allow Control-Drop of effects to replace selected effects
-			Guid effectGuid = (Guid)e.Data.GetData(DataFormats.Serializable);
+			
 			TimeSpan duration = TimeSpan.FromSeconds(2.0); // TODO: need a default value here. I suggest a per-effect default.
-			TimeSpan startTime = Util.Min(e.Time, (_sequence.Length - duration)); // Ensure the element is inside the grid.
+			//TimeSpan startTime = Util.Min(TimelineControl.PixelsToTime(location.X), (_sequence.Length - duration)); // Ensure the element is inside the grid.
 
 			if (ModifierKeys.HasFlag(Keys.Control) && TimelineControl.SelectedElements.Any())
 			{
 
 				var message = string.Format("This action will replace {0} effects, are you sure ?",
 					TimelineControl.SelectedElements.Count());
-				var result = MessageBox.Show(message, @"Replace existing effects?", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-				if (result == DialogResult.No)
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm(message, @"Replace existing effects?", true, false);
+				messageBox.ShowDialog();
+				if (messageBox.DialogResult == DialogResult.No)
 				{
 					return;
 				}
@@ -3135,636 +3492,524 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			}
 			else
 			{
-			AddNewEffectById(effectGuid, e.Row, startTime, duration);
-		}
+				AddNewEffectById(effectGuid, row, startTime, duration, true);
+			}
 		}
 
-		private Tuple<List<Element>,bool> BuildElementListForItemDrop(Element e)
+		private void UpdateEffectProperty(PropertyDescriptor descriptor, Element element, Object value)
 		{
-			List<Element> elementList = new List<Element>();
-			bool multipleEffectTypes = false;
+			descriptor.SetValue(element.EffectNode.Effect, value);
+			element.UpdateNotifyContentChanged();
+			SequenceModified();
+		}
 
-			if (e.Selected)
+		private bool ShowMultipleEffectDropMessage(string name)
+		{
+			//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+			MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+			var messageBox = new MessageBoxForm("Multiple type effects selected, this will only apply to effects of the type: " +
+									name, @"Multiple Type Effects", false, true);
+			messageBox.ShowDialog();
+			if (messageBox.DialogResult == DialogResult.Cancel)
 			{
-				foreach (Element elem in TimelineControl.SelectedElements)
+				return false;
+			}
+
+			return true;
+		}
+
+		private FormParameterPicker CreateParameterPicker(List<EffectParameterPickerControl> parameterPickerControls)
+		{
+			FormParameterPicker parameterPicker = new FormParameterPicker(parameterPickerControls)
+			{
+				StartPosition = FormStartPosition.Manual,
+				Top = _mouseOriginalPoint.Y
+			};
+			parameterPicker.Left = ((_mouseOriginalPoint.X + parameterPicker.Width) < Screen.FromControl(this).Bounds.Width)
+				? _mouseOriginalPoint.X
+				: _mouseOriginalPoint.X - parameterPicker.Width;
+			return parameterPicker;
+		}
+
+		private List<EffectParameterPickerControl> CreateGradientListPickerControls(PropertyData property, List<ColorGradient> gradients)
+		{
+			var parameterPickerControls = gradients.Select((t, i) => new EffectParameterPickerControl
+			{
+				Index = i,
+				PropertyInfo = property.Descriptor,
+				ParameterImage = GetColorGradientBitmap(t),
+				DisplayName = string.Format("{0} {1}", property.DisplayName, i + 1)
+			}).ToList();
+			return parameterPickerControls;
+		}
+
+
+		private List<EffectParameterPickerControl> CreateGradientLevelPairPickerControls(PropertyData property, List<GradientLevelPair> gradientLevelPairs, bool gradient=true)
+		{
+			var parameterPickerControls = gradientLevelPairs.Select((t, i) => new EffectParameterPickerControl
+			{
+				Index = i,
+				PropertyInfo = property.Descriptor,
+				ParameterImage = gradient?GetColorGradientBitmap(t.ColorGradient):GetCurveBitmap(t.Curve),
+				DisplayName = string.Format("{0} {1}", property.DisplayName, i + 1)
+			}).ToList();
+			return parameterPickerControls;
+		}
+
+		private IEnumerable<Element> GetElementsForDrop(Element element)
+		{
+			var elements = element.Selected
+				? TimelineControl.SelectedElements.Where(x => x.EffectNode.Effect.GetType() == element.EffectNode.Effect.GetType())
+				: new[] { element };
+			return elements;
+		}
+
+		private bool ValidateMultipleEffects(Element element, IEnumerable<Element> elements)
+		{
+			if (TimelineControl.SelectedElements.Count() > 1 && elements.Count() != TimelineControl.SelectedElements.Count())
+			{
+				if (!ShowMultipleEffectDropMessage(element.EffectNode.Effect.EffectName))
 				{
-					if (elem.EffectNode.Effect.TypeId == e.EffectNode.Effect.TypeId)
+					return true;
+				}
+			}
+			return false;
+		}
+
+		private void ShowMultiDropMessage()
+		{
+			UpdateToolStrip4("Choose the property to set, press Escape to cancel.", 4);
+		}
+
+		private void CompleteDrop(Dictionary<Element, Tuple<object, PropertyDescriptor>> elementValues, Element element, string type)
+		{
+			if (elementValues.Any())
+			{
+				var undo = new EffectsPropertyModifiedUndoAction(elementValues);
+				AddEffectsModifiedToUndo(undo);
+				TimelineControl.grid.ClearSelectedElements();
+				TimelineControl.SelectElement(element);
+				UpdateToolStrip4(
+					string.Format("{2} applied to {0} {1} effect(s).", elementValues.Count(), element.EffectNode.Effect.EffectName, type), 30);
+			}
+		}
+
+
+		#region Preset Library Color Drop
+
+		private void HandleColorDrop(Element element, Color color)
+		{
+			_mouseOriginalPoint = new Point(MousePosition.X, MousePosition.Y);
+
+			var elements = GetElementsForDrop(element);
+
+			if (ValidateMultipleEffects(element, elements)) return;	
+
+			HandleColorDropOnElements(elements, color);
+		}
+
+		private void HandleColorDropOnElements(IEnumerable<Element> elements, Color color)
+		{
+			if (elements == null || !elements.Any()) return;
+
+			var element = elements.First();
+
+			var properties = MetadataRepository.GetProperties(element.EffectNode.Effect).Where(x => (x.PropertyType == typeof(Color)) && x.IsBrowsable);
+
+			if (!properties.Any())
+			{
+				//if we are dropping on effects that do not have color just convert to gradient and use that drop method
+				HandleGradientDropOnElements(elements, new ColorGradient(color));
+				return;
+			}
+
+			properties = MetadataRepository.GetProperties(element.EffectNode.Effect).Where(x => (x.PropertyType == typeof(Color) ||
+				x.PropertyType == typeof(ColorGradient) || x.PropertyType == typeof(List<ColorGradient>) || x.PropertyType == typeof(List<GradientLevelPair>)) && x.IsBrowsable);
+
+			Dictionary<Element, Tuple<Object, PropertyDescriptor>> elementValues = new Dictionary<Element, Tuple<object, PropertyDescriptor>>();
+
+			if (!properties.Any()) return;
+			if (properties.Count() == 1)
+			{
+				var property = properties.First();
+				if (property.PropertyType == typeof (Color))
+				{
+					foreach (var e in elements)
 					{
-						elementList.Add(elem);
-					}
-					else
-					{
-						multipleEffectTypes = true;
+						HandleColorDropOnColor(color, elementValues, e, property.Descriptor);
 					}
 				}
 			}
 			else
 			{
-				elementList.Add(e);
-			}
+				//We have more than one color type property
+				List<EffectParameterPickerControl> parameterPickerControls = properties.Where(p => p.PropertyType == typeof(Color) || p.PropertyType == typeof(ColorGradient)).Select(propertyData => new EffectParameterPickerControl
+				{
+					PropertyInfo = propertyData.Descriptor, 
+					ParameterImage = propertyData.PropertyType == typeof (Color) ? GetColorBitmap((Color) propertyData.Descriptor.GetValue(element.EffectNode.Effect)) : GetColorGradientBitmap((ColorGradient) propertyData.Descriptor.GetValue(element.EffectNode.Effect))
+				}).ToList();
 
-			return new Tuple<List<Element>, bool>(elementList,multipleEffectTypes);
-		}
+				var gradientList = properties.Where(p => p.PropertyType == typeof (List<ColorGradient>));
+				foreach (var propertyData in gradientList)
+				{
+					List<ColorGradient> gradients = propertyData.Descriptor.GetValue(element.EffectNode.Effect) as List<ColorGradient>;
+					if (gradients == null) return;
 
-		#region Preset Library Color Drop
-		private void timelineControl_ColorDropped(object sender, ToolDropEventArgs e)
-		{
-			Tuple<List<Element>, bool> getElementList = BuildElementListForItemDrop(e.Element);
-			List<Element> elementList = getElementList.Item1;
-			var multipleEffectTypes = getElementList.Item2;
-			List<EffectParameterPickerControl> parameterPickerControls = new List<EffectParameterPickerControl>();
-			Color color = (Color)e.Data.GetData(typeof(Color));
-			var mousePosition = MousePosition; //Position of mouse when drop happened
-			var hasColor = false;
-			var isColorGradient = false;
-			var isColorList = false;
-			var isColorGradientList = false;
+					parameterPickerControls.AddRange(CreateGradientListPickerControls(propertyData, gradients));
+				}
 
-			if (multipleEffectTypes)
-			{
-				var dr =
-					MessageBox.Show(@"Multiple type effects selected, this will only apply to effects of the type: " +
-									e.Element.EffectNode.Effect.EffectName, @"Multiple Type Effects", MessageBoxButtons.OKCancel);
+				var gradientLevelList = properties.Where(p => p.PropertyType == typeof(List<GradientLevelPair>));
+				foreach (var propertyData in gradientLevelList)
+				{
+					List<GradientLevelPair> gradients = propertyData.Descriptor.GetValue(element.EffectNode.Effect) as List<GradientLevelPair>;
+					if (gradients == null) return;
+
+					parameterPickerControls.AddRange(CreateGradientLevelPairPickerControls(propertyData, gradients));
+				}
 				
-				if (dr == DialogResult.Cancel) return;
-			}
+				FormParameterPicker parameterPicker = CreateParameterPicker(parameterPickerControls);
 
-			int i = 0;
-			//Seach for typeof Color
-			foreach (ParameterSpecification pSig in e.Element.EffectNode.Effect.Parameters)
-			{
-				if (pSig.Type == typeof (Color))
-				{
-					hasColor = true;
-
-					EffectParameterPickerControl effectParameterPickerControl = new EffectParameterPickerControl
-					{
-						ParameterIndex = i,
-						ParameterName = pSig.Name,
-						ParameterImage = getColorBitmap((Color)e.Element.EffectNode.Effect.ParameterValues[i])
-					};
-					
-					parameterPickerControls.Add(effectParameterPickerControl);
-				}
-				i++;
-			}
-
-
-			//Seach for typeof ColorGradient
-			if (parameterPickerControls.Count == 0)
-			{
-				i = 0;
-				foreach (ParameterSpecification pSig in e.Element.EffectNode.Effect.Parameters)
-				{
-					if (pSig.Type == typeof(ColorGradient))
-					{
-						hasColor = isColorGradient = true;
-
-						EffectParameterPickerControl effectParameterPickerControl = new EffectParameterPickerControl
-						{
-							ParameterIndex = i,
-							ParameterName = pSig.Name,
-							ParameterImage = getColorGradientBitmap((ColorGradient)e.Element.EffectNode.Effect.ParameterValues[i])
-						};
-
-						parameterPickerControls.Add(effectParameterPickerControl);
-					}
-					i++;
-				}
-			}
-
-			//Seach for typeof List<Color>
-			if (parameterPickerControls.Count == 0)
-			{
-				i = 0;
-				foreach (ParameterSpecification pSig in e.Element.EffectNode.Effect.Parameters)
-				{
-					if (pSig.Type == typeof (List<Color>))
-					{
-						hasColor = isColorList = true;
-
-						List<Color> colorList = (List<Color>) e.Element.EffectNode.Effect.ParameterValues[i];
-
-						int colorIndex = 0;
-						foreach (Color colorItem in colorList)
-						{
-							EffectParameterPickerControl effectParameterPickerControl = new EffectParameterPickerControl
-							{
-								ParameterIndex = i,
-								ParameterListIndex = colorIndex,
-								ParameterName = "Color " + (colorIndex + 1),
-								ParameterImage = getColorBitmap(colorItem)
-							};
-
-							parameterPickerControls.Add(effectParameterPickerControl);
-							colorIndex++;
-						}
-					}
-					i++;
-				}
-
-			}
-
-			//Seach for typeof List<ColorGradient>
-			if (parameterPickerControls.Count == 0)
-			{
-				i = 0;
-				foreach (ParameterSpecification pSig in e.Element.EffectNode.Effect.Parameters)
-				{
-					if (pSig.Type == typeof(List<ColorGradient>))
-					{
-						hasColor = isColorGradientList = true;
-
-						List<ColorGradient> gradientList = (List<ColorGradient>)e.Element.EffectNode.Effect.ParameterValues[i];
-
-						int gradientIndex = 0;
-						foreach (ColorGradient gradientItem in gradientList)
-						{
-							EffectParameterPickerControl effectParameterPickerControl = new EffectParameterPickerControl
-							{
-								ParameterIndex = i,
-								ParameterListIndex = gradientIndex,
-								ParameterName = "ColorGradient " + (gradientIndex + 1),
-								ParameterImage = getColorGradientBitmap(gradientItem)
-							};
-
-							parameterPickerControls.Add(effectParameterPickerControl);
-							gradientIndex++;
-						}
-					}
-					i++;
-				}
-			}
-
-			if (parameterPickerControls.Count > 1 || isColorList || isColorGradientList)
-			{
-				FormParameterPicker parameterPicker = new FormParameterPicker(parameterPickerControls)
-				{
-					StartPosition = FormStartPosition.Manual,
-					Top = mousePosition.Y
-				};
-				parameterPicker.Left = ((mousePosition.X + parameterPicker.Width) < Screen.PrimaryScreen.Bounds.Width)
-					? mousePosition.X
-					: mousePosition.X - parameterPicker.Width;
-
-				UpdateToolStrip4("Chose the color property to set, press Escape to cancel.");
+				ShowMultiDropMessage();
 				var dr = parameterPicker.ShowDialog();
 				if (dr == DialogResult.OK)
 				{
-					int k = 1;
-					if (isColorList)
-					{
-						foreach (Element elem in elementList)
-						{
-							object[] parms = elem.EffectNode.Effect.ParameterValues;
-							List<Color> colorList = (List<Color>)parms[parameterPicker.ParameterIndex];
-							if (parameterPicker.ParameterListIndex >= colorList.Count) continue;							
-							colorList[parameterPicker.ParameterListIndex] = color;
-							parms[parameterPicker.ParameterIndex] = colorList;
-							elem.EffectNode.Effect.ParameterValues = parms;
-							TimelineControl.grid.RenderElement(elem);
-							SequenceModified();
-							k++;
-						}
-					}
-
-					if (isColorGradientList)
-					{
-						foreach (Element elem in elementList)
-						{
-							object[] parms = elem.EffectNode.Effect.ParameterValues;
-							List<ColorGradient> colorGradientList = (List<ColorGradient>) parms[parameterPicker.ParameterIndex];
-							if (parameterPicker.ParameterListIndex >= colorGradientList.Count) continue;
-							colorGradientList[parameterPicker.ParameterListIndex] = new ColorGradient(color);
-							parms[parameterPicker.ParameterIndex] = colorGradientList;
-							elem.EffectNode.Effect.ParameterValues = parms;
-							TimelineControl.grid.RenderElement(elem);
-							SequenceModified();
-							k++;
-						}
-					}
-
-					if (!isColorList && !isColorGradientList)
-					{
-						foreach (Element elem in elementList)
-						{
-							object[] parms = elem.EffectNode.Effect.ParameterValues;
-							parms[parameterPicker.ParameterIndex] = color;
-
-							switch (elem.EffectNode.Effect.EffectName)
-							{
-								case "Alternating":
-									if (parameterPicker.ParameterIndex == 1)
-										parms[8] = true;
-									else
-										parms[9] = true;
-									break;
-							}
-
-							elem.EffectNode.Effect.ParameterValues = parms;
-							TimelineControl.grid.RenderElement(elem);
-							SequenceModified();
-							k++;
-						}
-					}
 					
-					UpdateToolStrip4("Color applied to " + k + " " + e.Element.EffectNode.Effect.EffectName + " effect(s).",60);
+					foreach (var e in elements)
+					{
+						if (parameterPicker.PropertyInfo.PropertyType == typeof (Color))
+						{
+							HandleColorDropOnColor(color, elementValues, e, parameterPicker.PropertyInfo);
+						}
+						else if (parameterPicker.PropertyInfo.PropertyType == typeof(ColorGradient))
+						{
+							HandleGradientDropOnGradient(new ColorGradient(color), elementValues, e, parameterPicker.PropertyInfo);
+						}
+						else if (parameterPicker.PropertyInfo.PropertyType == typeof(List<ColorGradient>))
+						{
+							List<ColorGradient> gradients = parameterPicker.PropertyInfo.GetValue(element.EffectNode.Effect) as List<ColorGradient>;
+							var newGradients = gradients.ToList();
+							newGradients[parameterPicker.SelectedControl.Index] = new ColorGradient(color);
+							elementValues.Add(element, new Tuple<object, PropertyDescriptor>(parameterPicker.PropertyInfo.GetValue(element.EffectNode.Effect), parameterPicker.PropertyInfo));
+							UpdateEffectProperty(parameterPicker.PropertyInfo, element, newGradients);		
+						}
+						else if (parameterPicker.PropertyInfo.PropertyType == typeof(List<GradientLevelPair>))
+						{
+							List<GradientLevelPair> gradients = parameterPicker.PropertyInfo.GetValue(element.EffectNode.Effect) as List<GradientLevelPair>;
+							var newGradients = gradients.ToList();
+							newGradients[parameterPicker.SelectedControl.Index] = new GradientLevelPair(new ColorGradient(color), gradients[parameterPicker.SelectedControl.Index].Curve);
+							elementValues.Add(element, new Tuple<object, PropertyDescriptor>(parameterPicker.PropertyInfo.GetValue(element.EffectNode.Effect), parameterPicker.PropertyInfo));
+							UpdateEffectProperty(parameterPicker.PropertyInfo, element, newGradients);
+						}
+					}
 				}
 				else
 				{
-					UpdateToolStrip4("Color drop action cancled, no effects were modified.",60);
+					UpdateToolStrip4(String.Empty);
 				}
+
 			}
-			else
-			{
-				if (!hasColor)
-				{
-					UpdateToolStrip4("No action taken, the target effect(s) do not support colors.",60);
-					return;
-				}
+			CompleteDrop(elementValues, element, "Color");
+			
+		}
 
-				int j = !isColorGradient ? e.Element.EffectNode.Effect.Parameters.TakeWhile(pSig => pSig.Type != typeof(Color)).Count() : e.Element.EffectNode.Effect.Parameters.TakeWhile(pSig => pSig.Type != typeof(ColorGradient)).Count();
-
-				int k = 0;
-				foreach (Element elem in elementList)
-				{
-					object[] parms = elem.EffectNode.Effect.ParameterValues;
-					if (!isColorGradient)
-					{
-						parms[j] = color;
-					}
-					else
-					{
-						parms[j] = new ColorGradient(color);	
-					}
-
-					switch (elem.EffectNode.Effect.EffectName)
-					{
-						case "Chase":
-							parms[0] = 0;
-							break;
-						case "Spin":
-							parms[2] = 0;
-							break;
-						case "Twinkle":
-							parms[7] = 0;
-							break;
-					}
-
-					elem.EffectNode.Effect.ParameterValues = parms;
-					TimelineControl.grid.RenderElement(elem);
-					SequenceModified();
-					k++;
-				}
-
-				UpdateToolStrip4("Color applied to " + k + " " + e.Element.EffectNode.Effect.EffectName + " effect(s).",60);
-			}
+		private void HandleColorDropOnColor(Color color, Dictionary<Element, Tuple<object, PropertyDescriptor>> elementValues, Element e, PropertyDescriptor property)
+		{
+			elementValues.Add(e,
+				new Tuple<object, PropertyDescriptor>(property.GetValue(e.EffectNode.Effect), property));
+			UpdateEffectProperty(property, e, color);
 		}
 
 		#endregion Preset Library Color Drop
 
 		#region Preset Library Curve Drop
-		private void timelineControl_CurveDropped(object sender, ToolDropEventArgs e)
+		
+		private void HandleCurveDrop(Element element, Curve curve)
 		{
-			Tuple<List<Element>, bool> getElementList = BuildElementListForItemDrop(e.Element);
-			List<Element> elementList = getElementList.Item1;
-			var multipleEffectTypes = getElementList.Item2;
-			List<EffectParameterPickerControl> parameterPickerControls = new List<EffectParameterPickerControl>();
-			Curve curve = new Curve(_curveLibrary.GetCurve(e.Data.GetData(DataFormats.StringFormat).ToString()));
-			var mousePosition = MousePosition; //Position of mouse when drop happened
-			var hasCurve = false;
-			var isCurveList = false;
+			_mouseOriginalPoint = new Point(MousePosition.X, MousePosition.Y);
 
-			if (multipleEffectTypes)
-			{
-				var dr =
-					MessageBox.Show(@"Multiple type effects selected, this will only apply to effects of the type: " +
-					                e.Element.EffectNode.Effect.EffectName, @"Multiple Type Effects", MessageBoxButtons.OKCancel);
-				
-				if (dr == DialogResult.Cancel) return;
-			}
+			var elements = GetElementsForDrop(element);
 
-			if (ToolsForm.LinkCurves)
+			if (ValidateMultipleEffects(element, elements)) return;	
+
+			Dictionary<Element, Tuple<Object, PropertyDescriptor>> elementValues = new Dictionary<Element, Tuple<object, PropertyDescriptor>>();
+
+			var properties = MetadataRepository.GetProperties(element.EffectNode.Effect).Where(x => (x.PropertyType == typeof(Curve) || x.PropertyType == typeof(List<GradientLevelPair>)) && x.IsBrowsable);
+			if (!properties.Any()) return;
+			
+			if (properties.Count() == 1)
 			{
-				curve.LibraryReferenceName = e.Data.GetData(DataFormats.StringFormat).ToString();
+				var property = properties.First();
+
+				if (property.PropertyType == typeof (Curve))
+				{
+					foreach (var e in elements)
+					{
+						elementValues.Add(e, new Tuple<object, PropertyDescriptor>(property.Descriptor.GetValue(e.EffectNode.Effect), property.Descriptor));
+						UpdateEffectProperty(property.Descriptor, e, curve);
+					}
+				}
+				else if (property.PropertyType == typeof(List<GradientLevelPair>))
+				{
+					foreach (var e in elements)
+					{
+						HandleCurveDropOnGradientLevelPairList(property, e, elementValues, curve);
+					}
+				}
+
 			}
 			else
 			{
-				curve.LibraryReferenceName = string.Empty;
-				curve.UnlinkFromLibraryCurve();
-			}
-
-			curve.IsCurrentLibraryCurve = false;
-			
-			int i = 0;			
-			foreach (ParameterSpecification pSig in e.Element.EffectNode.Effect.Parameters)
-			{
-				if (pSig.Type == typeof (Curve))
+				//We have more than one property of the same type
+				List<EffectParameterPickerControl> parameterPickerControls = properties.Select(propertyData => new EffectParameterPickerControl
 				{
-					hasCurve = true;
+					PropertyInfo = propertyData.Descriptor,
+					ParameterImage = GetCurveBitmap((Curve)propertyData.Descriptor.GetValue(element.EffectNode.Effect))
+				}).ToList();
 
-					EffectParameterPickerControl effectParameterPickerControl = new EffectParameterPickerControl
-					{
-						ParameterIndex = i,
-						ParameterName = pSig.Name,
-						ParameterImage = getCurveBitmap((Curve)e.Element.EffectNode.Effect.ParameterValues[i])
-					};
+				var gradientLevelList = properties.Where(p => p.PropertyType == typeof(List<GradientLevelPair>));
+				foreach (var propertyData in gradientLevelList)
+				{
+					List<GradientLevelPair> gradients = propertyData.Descriptor.GetValue(element.EffectNode.Effect) as List<GradientLevelPair>;
+					if (gradients == null) return;
 
-					parameterPickerControls.Add(effectParameterPickerControl);
+					parameterPickerControls.AddRange(CreateGradientLevelPairPickerControls(propertyData, gradients, false));
 				}
-				i++;
-			}
 
-			//Seach for typeof List<Curve>
-			if (parameterPickerControls.Count == 0)
-			{
-				i = 0;
-				foreach (ParameterSpecification pSig in e.Element.EffectNode.Effect.Parameters)
-				{
-					if (pSig.Type == typeof(List<Curve>))
-					{
-						hasCurve = isCurveList = true;
+				FormParameterPicker parameterPicker = CreateParameterPicker(parameterPickerControls);
 
-						List<Curve> curveList = (List<Curve>)e.Element.EffectNode.Effect.ParameterValues[i];
-
-						int curveIndex = 0;
-						foreach (Curve curveItem in curveList)
-						{
-							EffectParameterPickerControl effectParameterPickerControl = new EffectParameterPickerControl
-							{
-								ParameterIndex = i,
-								ParameterListIndex = curveIndex,
-								ParameterName = "Curve " + (curveIndex + 1),
-								ParameterImage = getCurveBitmap(curveItem)
-							};
-
-							parameterPickerControls.Add(effectParameterPickerControl);
-							curveIndex++;
-						}
-					}
-					i++;
-				}
-			}
-
-			if (parameterPickerControls.Count > 1)
-			{
-				FormParameterPicker parameterPicker = new FormParameterPicker(parameterPickerControls)
-				{
-					StartPosition = FormStartPosition.Manual,
-					Top = mousePosition.Y
-				};
-				parameterPicker.Left = ((mousePosition.X + parameterPicker.Width) < Screen.PrimaryScreen.Bounds.Width)
-					? mousePosition.X
-					: mousePosition.X - parameterPicker.Width;
-
-				UpdateToolStrip4("Chose the Curve property to set, press Escape cancel.");
+				ShowMultiDropMessage();
 				var dr = parameterPicker.ShowDialog();
 				if (dr == DialogResult.OK)
 				{
-					int k = 0;
-					if (isCurveList)
+					if (parameterPicker.PropertyInfo.PropertyType == typeof (Curve))
 					{
-						foreach (Element elem in elementList)
+						foreach (var e in elements)
 						{
-							object[] parms = elem.EffectNode.Effect.ParameterValues;
-							List<Curve> curveList = (List<Curve>)parms[parameterPicker.ParameterIndex];
-							if (parameterPicker.ParameterListIndex >= curveList.Count) continue;
-							curveList[parameterPicker.ParameterListIndex] = new Curve(curve);
-							parms[parameterPicker.ParameterIndex] = curveList;
-							elem.EffectNode.Effect.ParameterValues = parms;
-							TimelineControl.grid.RenderElement(elem);
-							SequenceModified();
-							k++;
+							elementValues.Add(e,
+								new Tuple<object, PropertyDescriptor>(parameterPicker.PropertyInfo.GetValue(element.EffectNode.Effect),
+									parameterPicker.PropertyInfo));
+							UpdateEffectProperty(parameterPicker.PropertyInfo, e, curve);
+						}
+					}
+					else if (parameterPicker.PropertyInfo.PropertyType == typeof(List<GradientLevelPair>))
+					{
+						List<GradientLevelPair> gradientLevelPairs = parameterPicker.PropertyInfo.GetValue(element.EffectNode.Effect) as List<GradientLevelPair>;
+						if (gradientLevelPairs != null)
+						{
+							var newGradientLevelPairs = gradientLevelPairs.ToList();
+							newGradientLevelPairs[parameterPicker.SelectedControl.Index] =
+								new GradientLevelPair(gradientLevelPairs[parameterPicker.SelectedControl.Index].ColorGradient, curve);
+							elementValues.Add(element,
+								new Tuple<object, PropertyDescriptor>(parameterPicker.PropertyInfo.GetValue(element.EffectNode.Effect),
+									parameterPicker.PropertyInfo));
+							UpdateEffectProperty(parameterPicker.PropertyInfo, element, newGradientLevelPairs);
 						}
 					}
 					
-					else //!isCurveList
-					{
-						foreach (Element elem in elementList)
-						{
-							object[] parms = elem.EffectNode.Effect.ParameterValues;
-							parms[parameterPicker.ParameterIndex] = curve;
-							elem.EffectNode.Effect.ParameterValues = parms;
-							TimelineControl.grid.RenderElement(elem);
-							SequenceModified();
-							k++;
-						}
-					}
-					
-					UpdateToolStrip4("Curve " + e.Data.GetData(DataFormats.StringFormat) + " applied to " + k + " " + e.Element.EffectNode.Effect.EffectName + " effect(s).",60);
 				}
 				else
 				{
-					UpdateToolStrip4("Curve drop action cancled, no effects were modified.",60);
+					UpdateToolStrip4(String.Empty);
 				}
+
 			}
-			else
+			CompleteDrop(elementValues, element, "Curve");
+			
+		}
+
+		private void HandleCurveDropOnGradientLevelPairList(PropertyData property, Element element, Dictionary<Element, Tuple<object, PropertyDescriptor>> elementValues, Curve curve)
+		{
+			List<GradientLevelPair> gradientLevelPairs = property.Descriptor.GetValue(element.EffectNode.Effect) as List<GradientLevelPair>;
+			if (gradientLevelPairs == null) return;
+
+			var parameterPickerControls = CreateGradientLevelPairPickerControls(property, gradientLevelPairs, false);
+
+			var parameterPicker = CreateParameterPicker(parameterPickerControls);
+
+			ShowMultiDropMessage();
+			var dr = parameterPicker.ShowDialog();
+			if (dr == DialogResult.OK)
 			{
-				if (!hasCurve)
-				{
-					UpdateToolStrip4("No action taken, the target effect(s) do not support curves.",60);
-					return;
-				}
-
-				int j = e.Element.EffectNode.Effect.Parameters.TakeWhile(pSig => pSig.Type != typeof (Curve)).Count();
-
-				int k = 0;
-				foreach (Element elem in elementList)
-				{
-					object[] parms = elem.EffectNode.Effect.ParameterValues;
-					parms[j] = curve;
-					elem.EffectNode.Effect.ParameterValues = parms;
-					TimelineControl.grid.RenderElement(elem);
-					SequenceModified();
-					k++;
-				}
-
-				UpdateToolStrip4("Curve " + e.Data.GetData(DataFormats.StringFormat) + " applied to " + k + " " + e.Element.EffectNode.Effect.EffectName + " effect(s).",60);
+				var newGradientLevelPairs = gradientLevelPairs.ToList();
+				newGradientLevelPairs[parameterPicker.SelectedControl.Index] = new GradientLevelPair(gradientLevelPairs[parameterPicker.SelectedControl.Index].ColorGradient, curve);
+				elementValues.Add(element, new Tuple<object, PropertyDescriptor>(parameterPicker.PropertyInfo.GetValue(element.EffectNode.Effect), parameterPicker.PropertyInfo));
+				UpdateEffectProperty(parameterPicker.PropertyInfo, element, newGradientLevelPairs);
 			}
 		}
+
 
 		#endregion Preset Library Curve Drop
 
 		#region Preset Library Color Gradient Drop
-		private void timelineControl_GradientDropped(object sender, ToolDropEventArgs e)
+
+		private void HandleGradientDrop(Element element, ColorGradient color)
 		{
-			Tuple<List<Element>, bool> getElementList = BuildElementListForItemDrop(e.Element);
-			List<Element> elementList = getElementList.Item1;
-			var multipleEffectTypes = getElementList.Item2;
-			List<EffectParameterPickerControl> parameterPickerControls = new List<EffectParameterPickerControl>();
-			ColorGradient colorGradient = new ColorGradient(_colorGradientLibrary.GetColorGradient(e.Data.GetData(DataFormats.StringFormat).ToString()));
-			var mousePosition = MousePosition; //Position of mouse when drop happened
-			var hasColorGradient = false;
-			var isColorGradientList = false;
+			_mouseOriginalPoint = new Point(MousePosition.X, MousePosition.Y);
 
-			if (multipleEffectTypes)
+			var elements = GetElementsForDrop(element);
+
+			if (ValidateMultipleEffects(element, elements)) return;	
+
+			HandleGradientDropOnElements(elements, color);
+		}
+
+		private void HandleGradientDropOnElements(IEnumerable<Element> elements, ColorGradient gradient)
+		{
+			if (elements == null || !elements.Any()) return;
+			var element = elements.First();
+
+			Dictionary<Element, Tuple<Object, PropertyDescriptor>> elementValues = new Dictionary<Element, Tuple<object, PropertyDescriptor>>();
+
+			var properties = MetadataRepository.GetProperties(element.EffectNode.Effect).Where(x => (x.PropertyType == typeof(ColorGradient) ||
+				x.PropertyType == typeof(List<ColorGradient>) || x.PropertyType == typeof(List<GradientLevelPair>)) && x.IsBrowsable);
+			if (!properties.Any()) return;
+			if (properties.Count() == 1)
 			{
-				var dr =
-					MessageBox.Show(@"Multiple type effects selected, this will only apply to effects of the type: " +
-									e.Element.EffectNode.Effect.EffectName, @"Multiple Type Effects", MessageBoxButtons.OKCancel);
-
-				if (dr == DialogResult.Cancel) return;
-			}
-
-			if (ToolsForm.LinkGradients)
-			{
-				colorGradient.LibraryReferenceName = e.Data.GetData(DataFormats.StringFormat).ToString();
+				var property = properties.First();
+				if (property.PropertyType == typeof (ColorGradient))
+				{
+					foreach (var e in elements)
+					{
+						HandleGradientDropOnGradient(gradient, elementValues, e, property.Descriptor);
+					}
+				}
+				else if (property.PropertyType == typeof(List<ColorGradient>))
+				{
+					foreach (var e in elements)
+					{
+						HandleGradientDropOnColorGradientList(property, e, elementValues, gradient);
+					}
+				}
+				else if (property.PropertyType == typeof(List<GradientLevelPair>))
+				{
+					foreach (var e in elements)
+					{
+						HandleGradientDropOnGradientLevelPairList(property, e, elementValues, gradient);
+					}
+				}
 			}
 			else
 			{
-				colorGradient.LibraryReferenceName = string.Empty;
-				colorGradient.UnlinkFromLibrary();
-			}
-
-			colorGradient.IsCurrentLibraryGradient = false;
-
-			int i = 0;
-			foreach (ParameterSpecification pSig in e.Element.EffectNode.Effect.Parameters)
-			{
-				if (pSig.Type == typeof(ColorGradient))
+				//We have more than one color type property
+				List<EffectParameterPickerControl> parameterPickerControls = properties.Where(p => p.PropertyType == typeof(ColorGradient)).Select(propertyData => new EffectParameterPickerControl
 				{
-					hasColorGradient = true;
+					PropertyInfo = propertyData.Descriptor, 
+					ParameterImage = GetColorGradientBitmap((ColorGradient) propertyData.Descriptor.GetValue(element.EffectNode.Effect))
+				}).ToList();
 
-					EffectParameterPickerControl effectParameterPickerControl = new EffectParameterPickerControl
-					{
-						ParameterIndex = i,
-						ParameterName = pSig.Name,
-						ParameterImage = getColorGradientBitmap((ColorGradient)e.Element.EffectNode.Effect.ParameterValues[i])
-					};
+				var gradientList = properties.Where(p => p.PropertyType == typeof (List<ColorGradient>));
+				foreach (var propertyData in gradientList)
+				{
+					List<ColorGradient> gradients = propertyData.Descriptor.GetValue(element.EffectNode.Effect) as List<ColorGradient>;
+					if (gradients == null) return;
 
-					parameterPickerControls.Add(effectParameterPickerControl);
+					parameterPickerControls.AddRange(CreateGradientListPickerControls(propertyData, gradients));
 				}
-				i++;
-			}
 
-			//Seach for typeof List<ColorGradient>
-			if (parameterPickerControls.Count == 0)
-			{
-				i = 0;
-				foreach (ParameterSpecification pSig in e.Element.EffectNode.Effect.Parameters)
+				var gradientLevelList = properties.Where(p => p.PropertyType == typeof(List<GradientLevelPair>));
+				foreach (var propertyData in gradientLevelList)
 				{
-					if (pSig.Type == typeof(List<ColorGradient>))
-					{
-						hasColorGradient = isColorGradientList = true;
+					List<GradientLevelPair> gradients = propertyData.Descriptor.GetValue(element.EffectNode.Effect) as List<GradientLevelPair>;
+					if (gradients == null) return;
 
-						List<ColorGradient> gradientList = (List<ColorGradient>)e.Element.EffectNode.Effect.ParameterValues[i];
-
-						int gradientIndex = 0;
-						foreach (ColorGradient gradientItem in gradientList)
-						{
-							EffectParameterPickerControl effectParameterPickerControl = new EffectParameterPickerControl
-							{
-								ParameterIndex = i,
-								ParameterListIndex = gradientIndex,
-								ParameterName = "ColorGradient " + (gradientIndex + 1),
-								ParameterImage = getColorGradientBitmap(gradientItem)
-							};
-
-							parameterPickerControls.Add(effectParameterPickerControl);
-							gradientIndex++;
-						}
-					}
-					i++;
+					parameterPickerControls.AddRange(CreateGradientLevelPairPickerControls(propertyData, gradients));
 				}
-			}
+				
+				FormParameterPicker parameterPicker = CreateParameterPicker(parameterPickerControls);
 
-			if (parameterPickerControls.Count > 1)
-			{
-				FormParameterPicker parameterPicker = new FormParameterPicker(parameterPickerControls)
-				{
-					StartPosition = FormStartPosition.Manual,
-					Top = mousePosition.Y
-				};
-				parameterPicker.Left = ((mousePosition.X + parameterPicker.Width) < Screen.PrimaryScreen.Bounds.Width)
-					? mousePosition.X
-					: mousePosition.X - parameterPicker.Width;
-
-				UpdateToolStrip4("Chose the Color Gradient property to set, press Escape to cancel.");
+				ShowMultiDropMessage();
 				var dr = parameterPicker.ShowDialog();
 				if (dr == DialogResult.OK)
 				{
-					int k = 0;
-					if (isColorGradientList)
+
+					foreach (var e in elements)
 					{
-						foreach (Element elem in elementList)
+
+						if (parameterPicker.PropertyInfo.PropertyType == typeof (ColorGradient))
 						{
-							object[] parms = elem.EffectNode.Effect.ParameterValues;
-							List<ColorGradient> colorGradientList = (List<ColorGradient>)parms[parameterPicker.ParameterIndex];
-							if (parameterPicker.ParameterListIndex >= colorGradientList.Count) continue;
-							colorGradientList[parameterPicker.ParameterListIndex] = new ColorGradient(colorGradient);
-							parms[parameterPicker.ParameterIndex] = colorGradientList;
-							elem.EffectNode.Effect.ParameterValues = parms;
-							TimelineControl.grid.RenderElement(elem);
-							SequenceModified();
-							k++;
+							HandleGradientDropOnGradient(gradient, elementValues, e, parameterPicker.PropertyInfo);
+						}
+						else if (parameterPicker.PropertyInfo.PropertyType == typeof (List<ColorGradient>))
+						{
+							List<ColorGradient> gradients =
+								parameterPicker.PropertyInfo.GetValue(element.EffectNode.Effect) as List<ColorGradient>;
+							var newGradients = gradients.ToList();
+							newGradients[parameterPicker.SelectedControl.Index] = gradient;
+							elementValues.Add(element,
+								new Tuple<object, PropertyDescriptor>(parameterPicker.PropertyInfo.GetValue(element.EffectNode.Effect),
+									parameterPicker.PropertyInfo));
+							UpdateEffectProperty(parameterPicker.PropertyInfo, element, newGradients);
+						}
+						else if (parameterPicker.PropertyInfo.PropertyType == typeof (List<GradientLevelPair>))
+						{
+							List<GradientLevelPair> gradients =
+								parameterPicker.PropertyInfo.GetValue(element.EffectNode.Effect) as List<GradientLevelPair>;
+							var newGradients = gradients.ToList();
+							newGradients[parameterPicker.SelectedControl.Index]=new GradientLevelPair(gradient, gradients[parameterPicker.SelectedControl.Index].Curve);
+							elementValues.Add(element,
+								new Tuple<object, PropertyDescriptor>(parameterPicker.PropertyInfo.GetValue(element.EffectNode.Effect),
+									parameterPicker.PropertyInfo));
+							UpdateEffectProperty(parameterPicker.PropertyInfo, element, newGradients);
 						}
 					}
-					
-					else
-					{
-						foreach (Element elem in elementList)
-						{
-							object[] parms = elem.EffectNode.Effect.ParameterValues;
-							parms[parameterPicker.ParameterIndex] = colorGradient;
-
-							switch (elem.EffectNode.Effect.EffectName)
-							{
-								case "Alternating":
-									if (parameterPicker.ParameterIndex == 10)
-										parms[8] = false;
-									else
-										parms[9] = false;
-									break;
-							}
-
-							elem.EffectNode.Effect.ParameterValues = parms;
-							TimelineControl.grid.RenderElement(elem);
-							SequenceModified();
-							k++;
-						}
-					}
-
-					UpdateToolStrip4("Color Gradient " + e.Data.GetData(DataFormats.StringFormat) + " applied to " + k + " " + e.Element.EffectNode.Effect.EffectName + " effect(s).",60);
 				}
 				else
 				{
-					UpdateToolStrip4("Color Gradient drop action cancled, no effects were modified.",60);
+					UpdateToolStrip4(String.Empty);
 				}
+
+
 			}
-			else
+			CompleteDrop(elementValues, element, "Gradient");
+
+		}
+
+		private void HandleGradientDropOnGradient(ColorGradient gradient, Dictionary<Element, Tuple<object, PropertyDescriptor>> elementValues, Element e, PropertyDescriptor property)
+		{
+			elementValues.Add(e,
+				new Tuple<object, PropertyDescriptor>(property.GetValue(e.EffectNode.Effect), property));
+			UpdateEffectProperty(property, e, gradient);
+		}
+
+
+		private void HandleGradientDropOnColorGradientList(PropertyData property, Element element, Dictionary<Element, Tuple<object, PropertyDescriptor>> elementValues, ColorGradient gradient)
+		{
+			List<ColorGradient> gradients = property.Descriptor.GetValue(element.EffectNode.Effect) as List<ColorGradient>;
+			if (gradients == null) return;
+
+			var parameterPickerControls = CreateGradientListPickerControls(property, gradients);
+
+			var parameterPicker = CreateParameterPicker(parameterPickerControls);
+
+			ShowMultiDropMessage();
+			var dr = parameterPicker.ShowDialog();
+			if (dr == DialogResult.OK)
 			{
-				if (!hasColorGradient)
-				{
-					UpdateToolStrip4("No action taken, the target effect(s) do not support Color Gradients.",60);
-					return;
-				}
+				var newGradients = gradients.ToList();
+				newGradients[parameterPicker.SelectedControl.Index] = gradient;
+				elementValues.Add(element, new Tuple<object, PropertyDescriptor>(parameterPicker.PropertyInfo.GetValue(element.EffectNode.Effect), parameterPicker.PropertyInfo));
+				UpdateEffectProperty(parameterPicker.PropertyInfo, element, newGradients);
+			}
+		}
 
-				int j = e.Element.EffectNode.Effect.Parameters.TakeWhile(pSig => pSig.Type != typeof(ColorGradient)).Count();
 
-				int k = 0;
-				foreach (Element elem in elementList)
-				{
-					object[] parms = elem.EffectNode.Effect.ParameterValues;
-					parms[j] = colorGradient;
-					switch (elem.EffectNode.Effect.EffectName)
-					{
-						case "Chase":
-							parms[0] = ToolsForm.GradientHandling;
-							break;
-						case "Spin":
-							parms[2] = ToolsForm.GradientHandling;
-							break;
-						case "Twinkle":
-							parms[7] = ToolsForm.GradientHandling;
-							break;
-					}
-					elem.EffectNode.Effect.ParameterValues = parms;
-					TimelineControl.grid.RenderElement(elem);
-					SequenceModified();
-					k++;
-				}
+		private void HandleGradientDropOnGradientLevelPairList(PropertyData property, Element element, Dictionary<Element, Tuple<object, PropertyDescriptor>> elementValues, ColorGradient gradient)
+		{
+			List<GradientLevelPair> gradients = property.Descriptor.GetValue(element.EffectNode.Effect) as List<GradientLevelPair>;
+			if (gradients == null) return;
 
-				UpdateToolStrip4("Color Gradient " + e.Data.GetData(DataFormats.StringFormat) + " applied to " + k + " " + e.Element.EffectNode.Effect.EffectName + " effect(s).",60);
+			var parameterPickerControls = CreateGradientLevelPairPickerControls(property, gradients);
+
+			var parameterPicker = CreateParameterPicker(parameterPickerControls);
+
+			ShowMultiDropMessage();
+			var dr = parameterPicker.ShowDialog();
+			if (dr == DialogResult.OK)
+			{
+				var newGradients = gradients.ToList();
+				newGradients[parameterPicker.SelectedControl.Index] = new GradientLevelPair(gradient, gradients[parameterPicker.SelectedControl.Index].Curve);
+				elementValues.Add(element, new Tuple<object, PropertyDescriptor>(parameterPicker.PropertyInfo.GetValue(element.EffectNode.Effect), parameterPicker.PropertyInfo));
+				UpdateEffectProperty(parameterPicker.PropertyInfo, element, newGradients);
 			}
 		}
 		
@@ -3772,35 +4017,38 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 		#region Bitmap methods for PL item drops
 
-		private Bitmap getColorBitmap(Color color)
+		private Bitmap GetColorBitmap(Color color)
 		{
 			Bitmap colorBitmap = new Bitmap(48, 48);
 			Graphics gfx = Graphics.FromImage(colorBitmap);
 			using (SolidBrush brush = new SolidBrush(color))
 			{
 				gfx.FillRectangle(brush, 0, 0, 48, 48);
-				gfx.DrawRectangle(new Pen(Color.Black, 2), 0, 0, 48, 48);
 			}
 
-			return colorBitmap;
+			return drawBitmapBorder(colorBitmap);
 		}
 
-		private Bitmap getCurveBitmap(Curve curve)
+		private Bitmap GetCurveBitmap(Curve curve)
 		{
-			var curveBitmap = new Bitmap((curve.GenerateCurveImage(new Size(48, 48))));
-			Graphics gfx = Graphics.FromImage(curveBitmap);
-			gfx.DrawRectangle(new Pen(Color.Black, 2), 0, 0, 48, 48);
-
-			return curveBitmap;
+			var curveBitmap = new Bitmap((curve.GenerateGenericCurveImage(new Size(48, 48))));
+			return drawBitmapBorder(curveBitmap);
 		}
 
-		private Bitmap getColorGradientBitmap(ColorGradient colorGradient)
+		private Bitmap GetColorGradientBitmap(ColorGradient colorGradient)
 		{
 			var gradientBitmap = new Bitmap((colorGradient.GenerateColorGradientImage(new Size(48, 48), false)));
-			Graphics gfx = Graphics.FromImage(gradientBitmap);
-			gfx.DrawRectangle(new Pen(Color.Black, 2), 0, 0, 48, 48);
+			return drawBitmapBorder(gradientBitmap);
+		}
 
-			return gradientBitmap;
+		private Bitmap drawBitmapBorder(Bitmap image)
+		{
+			Graphics gfx = Graphics.FromImage(image);
+			using (Pen p = new Pen(Color.FromArgb(136,136,136), 2))
+			{
+				gfx.DrawRectangle(p, 0, 0, image.Width, image.Height);	
+			}
+			return image;	
 		}
 
 		#endregion Bitmap methods for PL item drops
@@ -3836,6 +4084,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 		protected override void OnKeyDown(KeyEventArgs e)
 		{
+			Element element;
 			// do anything special we want to here: keyboard shortcuts that are in
 			// the menu will be handled by them instead.
 			switch (e.KeyCode)
@@ -3872,25 +4121,49 @@ namespace VixenModules.Editor.TimedSequenceEditor
 					break;
 
 				case Keys.Space:
-					if (!_context.IsRunning)
-						PlaySequence();
-					else
-					{
-						if (_context.IsPaused)
-							PlaySequence();
-						else
-							StopSequence();
-					}
+					HandleSpacebarAction();
 					break;
 
 				case Keys.Left:
 					if (e.Control)
+					{
 						TimelineControl.MoveSelectedElementsByTime(TimelineControl.TimePerPixel.Scale(-2));
+					}
+					
 					break;
 
 				case Keys.Right:
 					if (e.Control)
+					{
 						TimelineControl.MoveSelectedElementsByTime(TimelineControl.TimePerPixel.Scale(2));
+					}
+					
+					break;
+				
+				case Keys.S:
+					element = TimelineControl.grid.ElementAtPosition(MousePosition);
+					if (element != null && TimelineControl.SelectedElements.Count() > 1 && TimelineControl.SelectedElements.Contains(element))
+					{
+						TimelineControl.grid.AlignElementStartTimes(TimelineControl.SelectedElements, element, e.Shift);
+					}
+					break;
+				case Keys.E:
+					
+					element = TimelineControl.grid.ElementAtPosition(MousePosition);
+					if (element != null && TimelineControl.SelectedElements.Count() > 1 && TimelineControl.SelectedElements.Contains(element))
+					{
+						TimelineControl.grid.AlignElementEndTimes(TimelineControl.SelectedElements, element, e.Shift);
+					}
+					break;
+					
+				case Keys.B:
+					
+					element = TimelineControl.grid.ElementAtPosition(MousePosition);
+					if (element != null && TimelineControl.SelectedElements.Count() > 1 && TimelineControl.SelectedElements.Contains(element))
+					{
+						TimelineControl.grid.AlignElementStartEndTimes(TimelineControl.SelectedElements, element);
+					}
+					
 					break;
 
 				case Keys.Escape:
@@ -3915,29 +4188,27 @@ namespace VixenModules.Editor.TimedSequenceEditor
 					else if (e.Control)
 						TimelineControl.Zoom(.8);
 					break;
-				case Keys.Z:
-					if (e.Control)
-					{
-						if (_undoMgr.NumUndoable > 0)
-						{
-							_undoMgr.Undo();	
-						}
-					}
-					break;
-				case Keys.Y:
-					if (e.Control)
-					{
-						if (_undoMgr.NumRedoable > 0)
-						{
-							_undoMgr.Redo();
-						}
-					}
+				case Keys.T:
+					TimelineControl.grid.ToggleSelectedRows(e.Control);
 					break;
 			}
 			// Prevents sending keystrokes to child controls. 
 			// This was causing serious slowdowns if random keys were pressed.
 			//e.SuppressKeyPress = true;
 			base.OnKeyDown(e);
+		}
+
+		internal void HandleSpacebarAction()
+		{
+			if (!_context.IsRunning)
+				PlaySequence();
+			else
+			{
+				if (_context.IsPaused)
+					PlaySequence();
+				else
+					StopSequence();
+			}
 		}
 
 		protected override void OnFormClosed(FormClosedEventArgs e)
@@ -3974,8 +4245,8 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 					int relativeVisibleRow = rownum - result.FirstVisibleRow;
 
-					TimelineElementsClipboardData.EffectModelCandidate modelCandidate =
-						new TimelineElementsClipboardData.EffectModelCandidate(elem.EffectNode.Effect)
+					EffectModelCandidate modelCandidate =
+						new EffectModelCandidate(elem.EffectNode.Effect)
 							{
 								Duration = elem.Duration,
 								StartTime = elem.StartTime
@@ -3987,8 +4258,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 					if (cutElements)
 					{
-						row.RemoveElement(elem);
-						_sequence.RemoveData(elem.EffectNode);
+						RemoveEffectNodeAndElement(elem.EffectNode);
 						SequenceModified();
 					}
 				}
@@ -4043,9 +4313,9 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			List<Row> visibleRows = new List<Row>(TimelineControl.VisibleRows);
 			int topTargetRoxIndex = visibleRows.IndexOf(targetRow);
 			List<EffectNode> nodesToAdd = new List<EffectNode>();
-			foreach (KeyValuePair<TimelineElementsClipboardData.EffectModelCandidate, int> kvp in data.EffectModelCandidates)
+			foreach (KeyValuePair<EffectModelCandidate, int> kvp in data.EffectModelCandidates)
 			{
-				TimelineElementsClipboardData.EffectModelCandidate effectModelCandidate = kvp.Key;
+				EffectModelCandidate effectModelCandidate = kvp.Key;
 				int relativeRow = kvp.Value;
 
 				int targetRowIndex = topTargetRoxIndex + relativeRow;
@@ -4205,17 +4475,31 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			ClipboardPaste(targetRow.Selected ? TimeSpan.Zero : TimelineControl.CursorPosition);
 		}
 
+		private void undoToolStripMenuItem_Click(object sender, EventArgs e)
+		{
+			if (_undoMgr.NumUndoable > 0)
+			{
+				_undoMgr.Undo();	
+			}
+		}
+
+		private void redoToolStripMenuItem_Click(object sender, EventArgs e)
+		{
+			if (_undoMgr.NumRedoable > 0)
+			{
+				_undoMgr.Redo();
+			}
+		}
+
 		private void toolStripMenuItem_deleteElements_Click(object sender, EventArgs e)
 		{
 			if (TimelineControl.ruler.selectedMarks.Any())
 			{
 				TimelineControl.ruler.DeleteSelectedMarks();
 			}
-			else
-				RemoveSelectedElements();
-			{
-				RemoveSelectedElements();
-			}
+			
+			RemoveSelectedElements();
+			
 		}
 
 		private void selectAllElementsToolStripMenuItem_Click(object sender, EventArgs e)
@@ -4310,22 +4594,39 @@ namespace VixenModules.Editor.TimedSequenceEditor
 					SequenceModified();
 					break;
 				}
-				
-				MessageBox.Show(@"Error parsing time: please use the format '<minutes>:<seconds>.<milliseconds>'",
-					@"Error parsing time");
+
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Error; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm("Error parsing time: please use the format '<minutes>:<seconds>.<milliseconds>'",
+					@"Error parsing time", false, false);
+				messageBox.ShowDialog();
 			} while (true);
 		}
 
 		private void gridWindowToolStripMenuItem_Click(object sender, EventArgs e)
 		{
 
-			if (GridForm.IsHidden)
+			if (GridForm.IsHidden || GridForm.DockState == DockState.Unknown)
 			{
 				GridForm.DockState = DockState.Document;
 				GridForm.Show(dockPanel, DockState.Document);
 			}
 			
 		}
+
+		private void effectEditorWindowToolStripMenuItem_Click(object sender, EventArgs e)
+		{
+			if (EffectEditorForm.DockState == DockState.Unknown)
+			{
+				EffectEditorForm.Show(dockPanel, DockState.DockRight);
+			}
+			else
+			{
+				EffectEditorForm.Close();
+			}
+
+		}
+
 
 		private void effectWindowToolStripMenuItem_Click(object sender, EventArgs e)
 		{
@@ -4334,8 +4635,6 @@ namespace VixenModules.Editor.TimedSequenceEditor
 				DockState dockState = EffectsForm.DockState;
 				if (dockState == DockState.Unknown) dockState = DockState.DockLeft;
 				EffectsForm.Show(dockPanel, dockState);
-				//We have to re-subscribe to the event handlers
-				EffectsForm.EscapeDrawMode += EscapeDrawMode;
 			}
 			else
 			{
@@ -4366,10 +4665,6 @@ namespace VixenModules.Editor.TimedSequenceEditor
 				dockState = DockState.DockLeft;
 				if (dockState == DockState.Unknown) dockState = DockState.DockLeft;
 				ToolsForm.Show(dockPanel, dockState);
-				//We have to re-subscribe to the event handlers
-				ToolsForm.StartColorDrag += ToolPalette_ColorDrag;
-				ToolsForm.StartCurveDrag += ToolPalette_CurveDrag;
-				ToolsForm.StartGradientDrag += ToolPalette_GradientDrag;
 			}
 			else
 			{
@@ -4475,6 +4770,23 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			}
 		}
 
+		private void toolStripDropDownButtonAlignToStrength_MenuItem_Click(object sender, EventArgs e)
+		{
+			ToolStripMenuItem item = sender as ToolStripMenuItem;
+			if (item != null && !item.Checked)
+			{
+				foreach (ToolStripMenuItem subItem in item.Owner.Items)
+				{
+					if (!item.Equals(subItem) && subItem != null)
+					{
+						subItem.Checked = false;
+					}
+				}
+				item.Checked = true;
+				AlignTo_Threshold = item.ToString();
+			}
+		}
+
 		#endregion
 
 		#region Undo
@@ -4486,9 +4798,11 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			_undoMgr.RedoItemsChanged += _undoMgr_RedoItemsChanged;
 
 			undoButton.Enabled = false;
+			undoToolStripMenuItem.Enabled = false;
 			undoButton.ItemChosen += undoButton_ItemChosen;
 
 			redoButton.Enabled = false;
+			redoToolStripMenuItem.Enabled = false;
 			redoButton.ItemChosen += redoButton_ItemChosen;
 		}
 
@@ -4519,10 +4833,12 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			if (_undoMgr.NumUndoable == 0)
 			{
 				undoButton.Enabled = false;
+				undoToolStripMenuItem.Enabled = false;
 				return;
 			}
 
 			undoButton.Enabled = true;
+			undoToolStripMenuItem.Enabled = true;
 			undoButton.UndoItems.Clear();
 			foreach (var act in _undoMgr.UndoActions)
 				undoButton.UndoItems.Add(act.Description);
@@ -4533,10 +4849,12 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			if (_undoMgr.NumRedoable == 0)
 			{
 				redoButton.Enabled = false;
+				redoToolStripMenuItem.Enabled = false;
 				return;
 			}
 
 			redoButton.Enabled = true;
+			redoToolStripMenuItem.Enabled = true;
 			redoButton.UndoItems.Clear();
 			foreach (var act in _undoMgr.RedoActions)
 				redoButton.UndoItems.Add(act.Description);
@@ -4556,6 +4874,30 @@ namespace VixenModules.Editor.TimedSequenceEditor
 		public void SwapPlaces(Dictionary<Element, ElementTimeInfo> changedElements)
 		{
 			TimelineControl.grid.SwapElementPlacement(changedElements);
+		}
+
+		//private void SwapEffectData(Dictionary<Element, EffectModelCandidate> changedElements)
+		//{
+		//	List<Element> keys = new List<Element>(changedElements.Keys);
+		//	foreach (var element in keys)
+		//	{
+		//		EffectModelCandidate modelCandidate =
+		//			new EffectModelCandidate(element.EffectNode.Effect)();
+
+		//		element.EffectNode.Effect.ModuleData = changedElements[element].GetEffectData(); ;
+		//		changedElements[element] = modelCandidate;
+		//		element.UpdateNotifyContentChanged();
+		//	}
+		//}
+
+		public void AddEffectsModifiedToUndo(Dictionary<Element, EffectModelCandidate> modifiedEffectElements, string labelName="properties")
+		{
+			_undoMgr.AddUndoAction(new EffectsModifiedUndoAction(modifiedEffectElements, labelName));
+		}
+
+		public void AddEffectsModifiedToUndo(EffectsPropertyModifiedUndoAction modifiedElements)
+		{
+			_undoMgr.AddUndoAction(modifiedElements);
 		}
 
 		#endregion
@@ -4624,7 +4966,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 			var xml = new XMLProfileSettings();
 			xml.PutSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/DockLeftPortion", Name), (int)dockPanel.DockLeftPortion);
-			xml.PutSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/DockRightPortion", Name), (int)dockPanel.DockLeftPortion);
+			xml.PutSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/DockRightPortion", Name), (int)dockPanel.DockRightPortion);
 			xml.PutSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/AutoSaveEnabled", Name), autoSaveToolStripMenuItem.Checked);
 			xml.PutSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/DrawModeSelected", Name), toolStripButton_DrawMode.Checked);
 			xml.PutSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/SelectionModeSelected", Name), toolStripButton_SelectionMode.Checked);
@@ -4636,11 +4978,15 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			xml.PutSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/WindowState", Name), WindowState.ToString());
 			xml.PutSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/SnapStrength", Name), TimelineControl.grid.SnapStrength);
 			xml.PutSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/CloseGapThreshold", Name), TimelineControl.grid.CloseGap_Threshold);
+			xml.PutSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/AlignToThreshold", Name), AlignTo_Threshold);
 			xml.PutSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/ResizeIndicatorEnabled", Name), TimelineControl.grid.ResizeIndicator_Enabled);
 			xml.PutSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/CadStyleSelectionBox", Name), cADStyleSelectionBoxToolStripMenuItem.Checked);
 			xml.PutSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/ResizeIndicatorColor", Name), TimelineControl.grid.ResizeIndicator_Color);
 			xml.PutSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/ToolPaletteLinkCurves", Name), ToolsForm.LinkCurves);
 			xml.PutSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/ToolPaletteLinkGradients", Name), ToolsForm.LinkGradients);
+			xml.PutSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/ZoomUnderMousePosition", Name), zoomUnderMousePositionToolStripMenuItem.Checked);
+			xml.PutSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/WaveFormHeight", Name), TimelineControl.waveform.Height);
+			xml.PutSetting(XMLProfileSettings.SettingType.AppSettings, string.Format("{0}/RulerHeight", Name), TimelineControl.ruler.Height);
 
 			//This .Close is here because we need to save some of the settings from the form before it is closed.
 			ToolsForm.Close();
@@ -4716,7 +5062,10 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			}
 			catch (Exception ex)
 			{
-				MessageBox.Show(ex.Message);
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Error; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm(ex.Message, @"Error parsing time", false, false);
+				messageBox.ShowDialog();
 				return;
 			}
 
@@ -4778,6 +5127,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 		private void _PlaySequence(TimeSpan rangeStart, TimeSpan rangeEnd)
 		{
+			EffectEditorForm.PreviewStop();
 			if (_context.IsRunning && _context.IsPaused)
 			{
 				_context.Resume();
@@ -4835,6 +5185,19 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			FormBorderStyle = FormBorderStyle.FixedSingle;
 			//loadingTask = Task.Factory.StartNew(() => loadSequence(_sequence), token);
 			LoadSequence(_sequence);
+
+			//Adjusts Row heights based on saved row height settings.
+			if (_sequence.RowHeightSettings != null)
+				foreach (RowHeightSetting rowSettings in _sequence.RowHeightSettings)
+				{
+					foreach (Row row in TimelineControl.Rows)
+					{
+						if (row.Name == rowSettings.RowName)
+						{
+							row.Height = rowSettings.RowHeight;
+		}
+					}
+				}
 		}
 
 		private void cboAudioDevices_TextChanged(object sender, EventArgs e)
@@ -4849,10 +5212,13 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 		private void menuStrip_MenuActivate(object sender, EventArgs e)
 		{
-			effectWindowToolStripMenuItem.Checked = (EffectsForm.DockState != DockState.Unknown);
-			markWindowToolStripMenuItem.Checked = (MarksForm.DockState != DockState.Unknown);
-			toolWindowToolStripMenuItem.Checked = (ToolsForm.DockState != DockState.Unknown);
+			//Check against the private object because it may not even be created and we don't want opening the menu
+			//to create the form if the user does not activate it. 
+			effectWindowToolStripMenuItem.Checked = !(_effectsForm == null || _effectsForm.DockState == DockState.Unknown);
+			markWindowToolStripMenuItem.Checked = !(_marksForm == null || _marksForm.DockState == DockState.Unknown);
+			toolWindowToolStripMenuItem.Checked = !(_toolPaletteForm==null || _toolPaletteForm.DockState == DockState.Unknown);
 			gridWindowToolStripMenuItem.Checked = !GridForm.IsHidden;
+			effectEditorWindowToolStripMenuItem.Checked = !(_effectEditorForm == null || EffectEditorForm.DockState == DockState.Unknown);
 		}
 
 		private void timerPostponePlay_Tick(object sender, EventArgs e)
@@ -4986,12 +5352,12 @@ namespace VixenModules.Editor.TimedSequenceEditor
                         IEffectModuleInstance effect =
                             ApplicationServices.Get<IEffectModuleInstance>(new LipSyncDescriptor().TypeId);
 
-                        ((LipSync)effect).StaticPhoneme = phoneme.TypeName.ToUpper();
+						((LipSync)effect).StaticPhoneme = (App.LipSyncApp.PhonemeType)Enum.Parse(typeof(App.LipSyncApp.PhonemeType), phoneme.TypeName.ToUpper());
                         ((LipSync)effect).LyricData = phoneme.LyricData;
 
                         TimeSpan startTime = TimeSpan.FromMilliseconds(phoneme.StartMS);
-                        TimelineElementsClipboardData.EffectModelCandidate modelCandidate =
-                              new TimelineElementsClipboardData.EffectModelCandidate(effect)
+                        EffectModelCandidate modelCandidate =
+                              new EffectModelCandidate(effect)
                               {
                                   Duration = TimeSpan.FromMilliseconds(phoneme.DurationMS - 1),
                                   StartTime = startTime,
@@ -5023,8 +5389,11 @@ namespace VixenModules.Editor.TimedSequenceEditor
                 displayStr += "Row #" + j +" - " + voiceStr + "\n";
                 j++;
             }
-            
-            MessageBox.Show(displayStr, @"Papagayo Import", MessageBoxButtons.OK);
+
+			//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+			MessageBoxForm.msgIcon = SystemIcons.Information; //this is used if you want to add a system icon to the message form.
+			var messageBox = new MessageBoxForm(displayStr, @"Papagayo Import", false, false);
+			messageBox.ShowDialog();
         }
 
         private void textConverterHandler(object sender, NewTranslationEventArgs args)
@@ -5048,11 +5417,11 @@ namespace VixenModules.Editor.TimedSequenceEditor
                     IEffectModuleInstance effect =
                         ApplicationServices.Get<IEffectModuleInstance>(new LipSyncDescriptor().TypeId);
 
-                    ((LipSync)effect).StaticPhoneme = data.Phoneme.ToString().ToUpper();
+					((LipSync)effect).StaticPhoneme = (App.LipSyncApp.PhonemeType)Enum.Parse(typeof(App.LipSyncApp.PhonemeType), data.Phoneme.ToString().ToUpper());
                     ((LipSync)effect).LyricData = data.LyricData;
 
-                    TimelineElementsClipboardData.EffectModelCandidate modelCandidate =
-                          new TimelineElementsClipboardData.EffectModelCandidate(effect)
+                    EffectModelCandidate modelCandidate =
+                          new EffectModelCandidate(effect)
                           {
                               Duration = data.Duration,
                               StartTime = data.StartOffset
@@ -5085,7 +5454,10 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
                 if (pasted == 0)
                 {
-                    MessageBox.Show(@"Conversion Complete and copied to Clipboard \n Paste at first Mark offset", @"Convert Text", MessageBoxButtons.OK);
+					//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+					MessageBoxForm.msgIcon = SystemIcons.Error; //this is used if you want to add a system icon to the message form.
+					var messageBox = new MessageBoxForm("Conversion Complete and copied to Clipboard \n Paste at first Mark offset", @"Convert Text", false, false);
+					messageBox.ShowDialog();
                 }
 
                 SequenceModified();
@@ -5164,8 +5536,10 @@ namespace VixenModules.Editor.TimedSequenceEditor
 		}
 		private void exportToolStripMenuItem_Click(object sender, EventArgs e)
 		{
+			EffectEditorForm.PreviewStop();
             ExportDialog ed = new ExportDialog(Sequence);
             ed.ShowDialog();
+			EffectEditorForm.ResumePreview();
 		}
 
 		private void bulkEffectMoveToolStripMenuItem_Click(object sender, EventArgs e)
@@ -5194,16 +5568,19 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 		/// <summary>
 		/// Aligns selected elements, or if none, all elements to the closest mark.
-		/// alignStart = true to align the start of the elements, false to align the end of the elements.
+		/// alignMethod = Start to align the start of the elements, End to align the end of the effects and Both to align Start and End of elements.
 		/// </summary>
-		/// <param name="alignStart"></param>
-		private void AlignEffectsToNearestMarks(bool alignStart)
+		/// <param name="alignMethod"></param>
+		private void AlignEffectsToNearestMarks(string alignMethod)
 		{
 			if (!TimelineControl.grid.SelectedElements.Any())
 			{
-				var result = MessageBox.Show(@"This action will apply to your entire sequence, are you sure ?",
-					@"Align effects to marks", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-				if (result == DialogResult.No) return;
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm("This action will apply to your entire sequence, are you sure ?",
+					@"Align effects to marks", true, false);
+				messageBox.ShowDialog();
+				if (messageBox.DialogResult == DialogResult.No) return;
 			}
 
 			Dictionary<Element, Tuple<TimeSpan, TimeSpan>> moveElements = new Dictionary<Element, Tuple<TimeSpan, TimeSpan>>();
@@ -5218,10 +5595,25 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 				foreach (Element element in elements)
 				{
-					var nearestMark = FindNearestMark(alignStart ? element.StartTime : element.EndTime);
-					if (nearestMark != TimeSpan.Zero && !moveElements.ContainsKey(element))
+					var nearestStartMark = element.StartTime;
+					var nearestEndMark = element.EndTime;
+
+					switch (alignMethod)
 					{
-						moveElements.Add(element, new Tuple<TimeSpan, TimeSpan>(alignStart ? nearestMark : element.StartTime, alignStart ? element.EndTime : nearestMark));
+						case "Start":
+							nearestStartMark = FindNearestMark(element.StartTime);
+							break;
+						case "End":
+							nearestEndMark = FindNearestMark(element.EndTime);
+							break;
+						case "Both":
+							nearestStartMark = FindNearestMark(element.StartTime);
+							nearestEndMark = FindNearestMark(element.EndTime);
+							break;
+					}
+					if (nearestStartMark != TimeSpan.Zero && !moveElements.ContainsKey(element) && nearestEndMark != TimeSpan.Zero && !moveElements.ContainsKey(element))
+					{
+						moveElements.Add(element, new Tuple<TimeSpan, TimeSpan>(nearestStartMark, nearestEndMark));
 					}
 				}
 			}
@@ -5230,16 +5622,22 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			if (moveElements.Any()) TimelineControl.grid.MoveResizeElements(moveElements);
 		}
 
+		private void ResetTimeLineSettings()
+		{
+			TimelineControl.VisibleTimeStart = TimeSpan.Zero;
+			TimelineControl.TimePerPixel = TimeSpan.FromTicks(100000);
+		}
+
 		/// <summary>
 		/// Returns the TimeSpan location of the nearest mark to the given TimeSpan
-		/// Located within the threshhold: TimelineControl.grid.CloseGap_Threshold
+		/// Located within the threshhold: AlignTo_Threshold
 		/// </summary>
 		/// <param name="referenceTimeSpan"></param>
 		/// <returns></returns>
 		private TimeSpan FindNearestMark(TimeSpan referenceTimeSpan)
 		{
 			List<TimeSpan> marksInRange = new List<TimeSpan>();
-			var threshold = TimeSpan.FromSeconds(Convert.ToDouble(TimelineControl.grid.CloseGap_Threshold));
+			var threshold = TimeSpan.FromSeconds(Convert.ToDouble(AlignTo_Threshold));
 			TimeSpan result = TimeSpan.Zero;
 			TimeSpan compareResult = TimeSpan.Zero;
 
@@ -5258,13 +5656,13 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 			foreach (TimeSpan markTime in marksInRange)
 			{
-				if (markTime > referenceTimeSpan && markTime - referenceTimeSpan < compareResult || result == TimeSpan.Zero)
+				if (markTime > referenceTimeSpan && markTime - referenceTimeSpan < compareResult.Duration() || result == TimeSpan.Zero)
 				{
 					compareResult = markTime - referenceTimeSpan;
 					result = markTime;
 				}
 
-				if (markTime < referenceTimeSpan && referenceTimeSpan - markTime < compareResult || result == TimeSpan.Zero)
+				if (markTime < referenceTimeSpan && referenceTimeSpan - markTime < compareResult.Duration() || result == TimeSpan.Zero)
 				{
 					compareResult = referenceTimeSpan - markTime;
 					result = markTime;
@@ -5283,15 +5681,28 @@ namespace VixenModules.Editor.TimedSequenceEditor
 					BeatsAndBars audioFeatures = new BeatsAndBars((Audio)module);
 					_sequence.MarkCollections = 
 						audioFeatures.DoBeatBarDetection(_sequence.MarkCollections);
-
-
-
+					
 					MarksForm.PopulateMarkCollectionsList(null);
 					SequenceModified();
 					break;
 
 				}
 			}
+		}
+
+		private void zoomUnderMousePositionToolStripMenuItem_CheckedChanged(object sender, EventArgs e)
+		{
+			TimelineControl.ZoomToMousePosition = zoomUnderMousePositionToolStripMenuItem.Checked;
+	}
+
+		private void resetRowHeightToolStripMenuItem_Click(object sender, EventArgs e)
+		{
+			TimelineControl.ResetRowHeight();
+		}
+
+		private void collapeAllElementGroupsToolStripMenuItem_Click(object sender, EventArgs e)
+		{
+			TimelineControl.RowListMenuCollapse();
 		}
 
 	}
@@ -5312,38 +5723,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 		public TimeSpan EarliestStartTime { get; set; }
 
-		/// <summary>
-		/// Class to hold effect data to allow it to be placed on the clipboard and be reconstructed when later pasted
-		/// </summary>
-		[Serializable]
-		public class EffectModelCandidate
-		{
-			private readonly Type _moduleDataClass;
-			private readonly MemoryStream _effectData;
-
-			public EffectModelCandidate(IEffectModuleInstance effect)
-			{
-				_moduleDataClass = effect.Descriptor.ModuleDataClass;
-				DataContractSerializer ds = new DataContractSerializer(_moduleDataClass);
-
-				TypeId = effect.Descriptor.TypeId;
-				_effectData = new MemoryStream();
-				using (XmlDictionaryWriter w = XmlDictionaryWriter.CreateBinaryWriter(_effectData))
-					ds.WriteObject(w, effect.ModuleData);
-			}
-
-			public TimeSpan StartTime { get; set; }
-			public TimeSpan Duration { get; set; }
-			public Guid TypeId { get; private set; }
-
-			public IModuleDataModel GetEffectData()
-			{
-				DataContractSerializer ds = new DataContractSerializer(_moduleDataClass);
-				MemoryStream effectDataIn = new MemoryStream(_effectData.ToArray());
-				using (XmlDictionaryReader r = XmlDictionaryReader.CreateBinaryReader(effectDataIn, XmlDictionaryReaderQuotas.Max))
-					return (IModuleDataModel) ds.ReadObject(r);
-			}
-		}
+		
 	}
 
 	public class TimeFormats
@@ -5377,6 +5757,5 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			get { return _negativeFormats; }
 		}
 	}
-
 
 }

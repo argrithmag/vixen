@@ -8,21 +8,27 @@ using System.Reflection;
 using System.Resources;
 using System.Text;
 using System.Windows.Forms;
+using Common.Controls;
+using Common.Controls.Theme;
+using Common.Resources.Properties;
 using Vixen.Services;
 using Vixen.Sys;
 using Vixen.Module.App;
 
 namespace VixenModules.App.LipSyncApp
 {
-    public partial class LipSyncMapSelector : Form
+	public partial class LipSyncMapSelector : BaseForm
     {
         private Bitmap _iconBitmap;
 
         public LipSyncMapSelector()
 		{
 			InitializeComponent();
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			ThemeUpdateControls.UpdateControls(this);
             listViewMappings.Sorting = SortOrder.Ascending;
-			Icon = Common.Resources.Properties.Resources.Icon_Vixen3;
+			Icon = Resources.Icon_Vixen3;
             Changed = false;
 		}
 
@@ -87,6 +93,26 @@ namespace VixenModules.App.LipSyncApp
 			}
 			listViewMappings.EndUpdate();
 
+			//listViewMappings.LargeImageList = new ImageList { ColorDepth = ColorDepth.Depth32Bit, ImageSize = new Size(68, 68) };
+
+			//foreach (KeyValuePair<string, LipSyncMapData> kvp in Library)
+			//{
+			//	LipSyncMapData c = kvp.Value;
+			//	string name = kvp.Key;
+
+			//	var image = c.cGenerateGenericCurveImage(new Size(68, 68));
+			//	Graphics gfx = Graphics.FromImage(image);
+			//	gfx.VixenModules.App.Curves.DrawRectangle(new Pen(Color.FromArgb(136, 136, 136), 2), 0, 0, 68, 68);
+
+			//	listViewMappings.LargeImageList.Images.Add(name, image);
+
+			//	ListViewItem item = new ListViewItem { Text = name, Name = name, ImageKey = name, Tag = c };
+			//	item.ForeColor = DarkThemeColorTable.ForeColor;
+			//	listViewMappings.Items.Add(item);
+			//}
+
+			//listViewMappings.EndUpdate();
+
             buttonNewMap.Enabled = true;
             buttonEditMap.Enabled = false;
 			buttonDeleteMap.Enabled = false;
@@ -124,7 +150,8 @@ namespace VixenModules.App.LipSyncApp
 		
         private void buttonEditMap_Click(object sender, EventArgs e)
 		{
-            EditMap();			
+            EditMap();
+			Refresh();
 		}
 
         private void DeleteSelectedMapping()
@@ -133,13 +160,14 @@ namespace VixenModules.App.LipSyncApp
             {
                 return;
             }
-                
-            DialogResult result =
-                MessageBox.Show("If you delete this mapping, ALL places it is used will be unlinked and will" +
-                                " revert to the default Mapping. Are you sure you want to continue?", "Delete the mapping?",
-                                MessageBoxButtons.YesNo);
 
-            if (result == System.Windows.Forms.DialogResult.Yes)
+			//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+			MessageBoxForm.msgIcon = SystemIcons.Exclamation; //this is used if you want to add a system icon to the message form.
+			var messageBox = new MessageBoxForm("If you delete this mapping, ALL places it is used will be unlinked and will" +
+								" revert to the default Mapping. Are you sure you want to continue?", "Delete the mapping?", true, false);
+			messageBox.ShowDialog();
+
+			if (messageBox.DialogResult == DialogResult.OK)
             {
                 foreach (int j in listViewMappings.SelectedIndices)
                 {
@@ -221,6 +249,7 @@ namespace VixenModules.App.LipSyncApp
                 this.PopulateListWithMappings();
             }
 
+			Refresh();
         }
 
         private void listViewMappings_KeyDown(object sender, KeyEventArgs e)
@@ -243,5 +272,17 @@ namespace VixenModules.App.LipSyncApp
             }
 
         }
+
+		private void buttonBackground_MouseHover(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImageHover;
+		}
+
+		private void buttonBackground_MouseLeave(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImage;
+		}
     }
 }

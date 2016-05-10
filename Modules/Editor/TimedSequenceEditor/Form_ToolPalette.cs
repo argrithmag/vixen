@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
+using Common.Controls;
 using Common.Controls.Timeline;
 using Common.Resources.Properties;
 using System.IO;
@@ -16,6 +17,7 @@ using Vixen.Services;
 using Vixen.Module.App;
 using WeifenLuo.WinFormsUI.Docking;
 using System.Runtime.InteropServices;
+using Common.Controls.Theme;
 
 
 namespace VixenModules.Editor.TimedSequenceEditor
@@ -43,18 +45,8 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 		#endregion
 
-		#region Public EventHandlers
-
-		public EventHandler StartColorDrag;
-		public EventHandler StartCurveDrag;
-		public EventHandler StartGradientDrag;
-
-		#endregion
-
 		#region Public Members
 
-		public int GradientHandling	{ get { return comboBoxGradientHandling.SelectedIndex + 1; } }
-		
 		public bool LinkCurves
 		{ 
 			get { return checkBoxLinkCurves.Checked; }
@@ -93,7 +85,6 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			InitializeComponent();
 			TimelineControl = timelineControl;
 			Icon = Resources.Icon_Vixen3;
-
 			toolStripButtonEditColor.DisplayStyle = ToolStripItemDisplayStyle.Image;
 			toolStripButtonEditColor.Image = Resources.pencil;
 			toolStripButtonNewColor.DisplayStyle = ToolStripItemDisplayStyle.Image;
@@ -130,6 +121,26 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			ListViewItem_SetSpacing(listViewColors, 48 + 5, 48 + 5);
 			ListViewItem_SetSpacing(listViewCurves, 48 + 5, 48 + 30);
 			ListViewItem_SetSpacing(listViewGradients, 48 + 5, 48 + 30);
+
+			listViewColors.AllowDrop = true;
+			listViewCurves.AllowDrop = true;
+			listViewGradients.AllowDrop = true;
+
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			ThemeUpdateControls.UpdateControls(this);
+			foreach (Control tab in tabControlEX1.TabPages)
+			{
+				tab.BackColor = ThemeColorTable.BackgroundColor;
+				tab.ForeColor = ThemeColorTable.ForeColor;
+			}
+			tabControlEX1.SelectedTabColor = ThemeColorTable.BackgroundColor;
+			tabControlEX1.TabColor = ThemeColorTable.BackgroundColor;
+			tabControlEX1.SelectedTab = tabPageEX1;
+			//Over-ride the auto theme listview back color
+			listViewColors.BackColor = ThemeColorTable.BackgroundColor;
+			listViewCurves.BackColor = ThemeColorTable.BackgroundColor;
+			listViewGradients.BackColor = ThemeColorTable.BackgroundColor;
 		}
 
 		private void ColorPalette_Load(object sender, EventArgs e)
@@ -156,8 +167,6 @@ namespace VixenModules.Editor.TimedSequenceEditor
 				_colorGradientLibrary.GradientChanged += GradientLibrary_GradientChanged;
 			}
 			
-			comboBoxGradientHandling.SelectedIndex = 0;
-
 		}
 
 		#endregion
@@ -201,27 +210,37 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 			foreach (Color colorItem in _colors)
 			{
-				Bitmap result = new Bitmap(48, 48);
-				Graphics gfx = Graphics.FromImage(result);
-				using (SolidBrush brush = new SolidBrush(colorItem))
-				{
-					gfx.FillRectangle(brush, 0, 0, 48, 48);
-					gfx.DrawRectangle(new Pen(Color.Black, 2), 0, 0, 48, 48);
-				}
-
-				listViewColors.LargeImageList.Images.Add(colorItem.ToString(), result);
-
-				ListViewItem item = new ListViewItem
-				{
-					ToolTipText = string.Format("R: {0} G: {1} B: {2}", colorItem.R, colorItem.G, colorItem.B),
-					ImageKey = colorItem.ToString(),
-					Tag = colorItem
-				};
+				var item = CreateColorListItem(colorItem);
 
 				listViewColors.Items.Add(item);
 			}
 			listViewColors.EndUpdate();
 			toolStripButtonEditColor.Enabled = toolStripButtonDeleteColor.Enabled = false;
+		}
+
+		private ListViewItem CreateColorListItem(Color colorItem)
+		{
+			Bitmap result = new Bitmap(48, 48);
+			Graphics gfx = Graphics.FromImage(result);
+			using (SolidBrush brush = new SolidBrush(colorItem))
+			{
+				using (var p = new Pen(ThemeColorTable.BorderColor, 2))
+				{
+					gfx.FillRectangle(brush, 0, 0, 48, 48);
+					gfx.DrawRectangle(p, 0, 0, 48, 48);
+				}
+			}
+			gfx.Dispose();
+			listViewColors.LargeImageList.Images.Add(colorItem.ToString(), result);
+
+			ListViewItem item = new ListViewItem
+			{
+				ToolTipText = string.Format("R: {0} G: {1} B: {2}", colorItem.R, colorItem.G, colorItem.B),
+				ImageKey = colorItem.ToString(),
+				Tag = colorItem,
+				ForeColor = ThemeColorTable.ForeColor
+			};
+			return item;
 		}
 
 		private void Update_ColorOrder()
@@ -244,18 +263,31 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			listViewCurves.Items.Clear();
 
 			listViewCurves.LargeImageList = new ImageList { ColorDepth = ColorDepth.Depth32Bit, ImageSize = new Size(48, 48) };
-
-			foreach (KeyValuePair<string, Curve> kvp in _curveLibrary)
+			using (var p = new Pen(ThemeColorTable.BorderColor, 2))
 			{
-				Curve c = kvp.Value;
-				string name = kvp.Key;
+				foreach (KeyValuePair<string, Curve> kvp in _curveLibrary)
+				{
+					Curve c = kvp.Value;
+					string name = kvp.Key;
 
-				listViewCurves.LargeImageList.Images.Add(name, c.GenerateCurveImage(new Size(48, 48)));
+					var image = c.GenerateGenericCurveImage(new Size(48, 48));
+					Graphics gfx = Graphics.FromImage(image);
+					gfx.DrawRectangle(p, 0, 0, 48, 48);
+					gfx.Dispose();
+					listViewCurves.LargeImageList.Images.Add(name, image);
 
-				ListViewItem item = new ListViewItem {Text = name, Name = name, ImageKey = name};
-
-				if (item != null) listViewCurves.Items.Add(item);
+					ListViewItem item = new ListViewItem
+					{
+						Text = name,
+						Name = name,
+						ImageKey = name,
+						Tag = c,
+						ForeColor = ThemeColorTable.ForeColor
+					};
+					listViewCurves.Items.Add(item);
+				}
 			}
+			
 
 			listViewCurves.EndUpdate();
 			toolStripButtonEditCurve.Enabled = toolStripButtonDeleteCurve.Enabled = false;
@@ -271,21 +303,32 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			listViewGradients.Items.Clear();
 
 			listViewGradients.LargeImageList = new ImageList { ColorDepth = ColorDepth.Depth32Bit, ImageSize = new Size(48, 48) };
-
-			foreach (KeyValuePair<string, ColorGradient> kvp in _colorGradientLibrary)
+			using (var p = new Pen(ThemeColorTable.BorderColor, 2))
 			{
-				ColorGradient gradient = kvp.Value;
-				string name = kvp.Key;
+				foreach (KeyValuePair<string, ColorGradient> kvp in _colorGradientLibrary)
+				{
+					ColorGradient gradient = kvp.Value;
+					string name = kvp.Key;
 
-				var result = new Bitmap(gradient.GenerateColorGradientImage(new Size(48, 48), false), 48, 48);
-				Graphics gfx = Graphics.FromImage(result);
-				gfx.DrawRectangle(new Pen(Color.Black, 2), 0, 0, 48, 48);
-				listViewGradients.LargeImageList.Images.Add(name, result);
+					var result = new Bitmap(gradient.GenerateColorGradientImage(new Size(48, 48), false), 48, 48);
+					Graphics gfx = Graphics.FromImage(result);
+					gfx.DrawRectangle(p, 0, 0, 48, 48);
+					gfx.Dispose();
+					listViewGradients.LargeImageList.Images.Add(name, result);
+					
+					ListViewItem item = new ListViewItem
+					{
+						Text = name,
+						Name = name,
+						ImageKey = name,
+						Tag = gradient,
+						ForeColor = ThemeColorTable.ForeColor
+					};
 
-				ListViewItem item = new ListViewItem {Text = name, Name = name, ImageKey = name};
-
-				listViewGradients.Items.Add(item);
+					listViewGradients.Items.Add(item);
+				}
 			}
+			
 
 			listViewGradients.EndUpdate();
 			toolStripButtonEditGradient.Enabled = toolStripButtonDeleteGradient.Enabled = false;
@@ -344,9 +387,12 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			if (listViewColors.SelectedItems == null)
 				return;
 
-			DialogResult result = MessageBox.Show(@"Are you sure you want to delete this color?", @"Delete color?", MessageBoxButtons.YesNoCancel);
+			//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+			MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+			var messageBox = new MessageBoxForm("Are you sure you want to delete this color?", "Delete color?", true, true);
+			messageBox.ShowDialog();
 
-			if (result == DialogResult.Yes)
+			if (messageBox.DialogResult == DialogResult.OK)
 			{
 				_colors.Remove((Color)listViewColors.SelectedItems[0].Tag);
 			}
@@ -380,37 +426,52 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 		private void toolStripButtonNewCurve_Click(object sender, EventArgs e)
 		{
+			AddCurveToLibrary(new Curve());
+		}
+
+		private void AddCurveToLibrary(Curve c, bool edit=true)
+		{
 			Common.Controls.TextDialog dialog = new Common.Controls.TextDialog("Curve name?");
 
 			while (dialog.ShowDialog() == DialogResult.OK)
 			{
 				if (dialog.Response == string.Empty)
 				{
-					MessageBox.Show(@"Please enter a name.");
+					//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+					var messageBox = new MessageBoxForm("Please enter a name.", "Curve Name", false, false);
+					messageBox.ShowDialog();
 					continue;
 				}
 
 				if (_curveLibrary.Contains(dialog.Response))
 				{
-					DialogResult result = MessageBox.Show(@"There is already a curve with that name. Do you want to overwrite it?",
-														  @"Overwrite curve?", MessageBoxButtons.YesNoCancel);
-					if (result == DialogResult.Yes)
+					//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+					MessageBoxForm.msgIcon = SystemIcons.Question; //this is used if you want to add a system icon to the message form.
+					var messageBox = new MessageBoxForm("There is already a curve with that name. Do you want to overwrite it?", "Overwrite curve?", true, true);
+					messageBox.ShowDialog();
+					if (messageBox.DialogResult == DialogResult.OK)
 					{
-						_curveLibrary.AddCurve(dialog.Response, new Curve());
-						_curveLibrary.EditLibraryCurve(dialog.Response);
-						Populate_Curves();
+						_curveLibrary.AddCurve(dialog.Response, c);
+						if (edit)
+						{
+							_curveLibrary.EditLibraryCurve(dialog.Response);	
+						}
 						break;
 					}
 
-					if (result == DialogResult.Cancel)
+					if (messageBox.DialogResult == DialogResult.Cancel)
 					{
 						break;
 					}
 				}
 				else
 				{
-					_curveLibrary.AddCurve(dialog.Response, new Curve());
-					_curveLibrary.EditLibraryCurve(dialog.Response);
+					_curveLibrary.AddCurve(dialog.Response, c);
+					if (edit)
+					{
+						_curveLibrary.EditLibraryCurve(dialog.Response);	
+					}
+					
 					break;
 				}
 			}
@@ -421,10 +482,13 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			if (listViewCurves.SelectedItems.Count == 0)
 				return;
 
-			DialogResult result = MessageBox.Show(@"If you delete this library curve, ALL places it is used will be unlinked and will" +
-								@" become independent curves. Are you sure you want to continue?", @"Delete library curve?", MessageBoxButtons.YesNoCancel);
+			//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+			MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+			var messageBox = new MessageBoxForm("If you delete this library curve, ALL places it is used will be unlinked and will" +
+								@" become independent curves. Are you sure you want to continue?", "Delete library curve?", true, true);
+			messageBox.ShowDialog();
 
-			if (result == DialogResult.Yes)
+			if (messageBox.DialogResult == DialogResult.OK)
 			{
 				_curveLibrary.RemoveCurve(listViewCurves.SelectedItems[0].Name);
 
@@ -461,37 +525,52 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 		private void toolStripButtonNewGradient_Click(object sender, EventArgs e)
 		{
+			AddGradientToLibrary(new ColorGradient());
+		}
+
+		private void AddGradientToLibrary(ColorGradient cg, bool edit = true)
+		{
 			Common.Controls.TextDialog dialog = new Common.Controls.TextDialog("Gradient name?");
 
 			while (dialog.ShowDialog() == DialogResult.OK)
 			{
 				if (dialog.Response == string.Empty)
 				{
-					MessageBox.Show(@"Please enter a name.");
+					//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+					MessageBoxForm.msgIcon = SystemIcons.Error; //this is used if you want to add a system icon to the message form.
+					var messageBox = new MessageBoxForm("Please enter a name.", "Warning", false, false);
+					messageBox.ShowDialog();
 					continue;
 				}
 
 				if (_colorGradientLibrary.Contains(dialog.Response))
 				{
-					DialogResult result = MessageBox.Show(@"There is already a gradient with that name. Do you want to overwrite it?",
-														  @"Overwrite gradient?", MessageBoxButtons.YesNoCancel);
-					if (result == DialogResult.Yes)
+					//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+					MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+					var messageBox = new MessageBoxForm("There is already a gradient with that name. Do you want to overwrite it?", "Overwrite gradient?", true, true);
+					messageBox.ShowDialog();
+					if (messageBox.DialogResult == DialogResult.OK)
 					{
-						_colorGradientLibrary.AddColorGradient(dialog.Response, new ColorGradient());
-						_colorGradientLibrary.EditLibraryItem(dialog.Response);
-						Populate_Gradients();
+						_colorGradientLibrary.AddColorGradient(dialog.Response, cg);
+						if (edit)
+						{
+							_colorGradientLibrary.EditLibraryItem(dialog.Response);	
+						}
 						break;
 					}
-					
-					if (result == DialogResult.Cancel)
+
+					if (messageBox.DialogResult == DialogResult.Cancel)
 					{
 						break;
 					}
 				}
 				else
 				{
-					_colorGradientLibrary.AddColorGradient(dialog.Response, new ColorGradient());
-					_colorGradientLibrary.EditLibraryItem(dialog.Response);
+					_colorGradientLibrary.AddColorGradient(dialog.Response, cg);
+					if (edit)
+					{
+						_colorGradientLibrary.EditLibraryItem(dialog.Response);	
+					}
 					break;
 				}
 			}
@@ -502,12 +581,13 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			if (listViewGradients.SelectedItems.Count == 0)
 				return;
 
-			DialogResult result =
-				MessageBox.Show(@"If you delete this library gradient, ALL places it is used will be unlinked and will" +
-								@" become independent gradients. Are you sure you want to continue?", @"Delete library gradient?",
-								MessageBoxButtons.YesNoCancel);
+			//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+			MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+			var messageBox = new MessageBoxForm("If you delete this library gradient, ALL places it is used will be unlinked and will" +
+								@" become independent gradients. Are you sure you want to continue?", "Delete library gradient?", true, true);
+			messageBox.ShowDialog();
 
-			if (result == DialogResult.Yes)
+			if (messageBox.DialogResult == DialogResult.OK)
 			{
 				_colorGradientLibrary.RemoveColorGradient(listViewGradients.SelectedItems[0].Name);
 			}
@@ -548,7 +628,7 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			}
 			else
 			{
-				StartColorDrag(this, e);
+				//StartColorDrag(this, e);
 				listViewColors.DoDragDrop(listViewColors.SelectedItems[0].Tag, DragDropEffects.Copy);
 			} 
 
@@ -556,19 +636,45 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 		private void listViewColors_DragDrop(object sender, DragEventArgs e)
 		{
-			listViewColors.Alignment = ListViewAlignment.Default;
-			if (listViewColors.SelectedItems.Count == 0)
-				return;
-			Point p = listViewColors.PointToClient(new Point(e.X, e.Y));
-			ListViewItem movetoNewPosition = listViewColors.GetItemAt(p.X, p.Y);
-			if (movetoNewPosition == null) return;
-			ListViewItem dropToNewPosition = (e.Data.GetData(typeof(ListView.SelectedListViewItemCollection)) as ListView.SelectedListViewItemCollection)[0];
-			ListViewItem cloneToNew = (ListViewItem)dropToNewPosition.Clone();
-			int index = movetoNewPosition.Index;
-			listViewColors.Items.Remove(dropToNewPosition);
-			listViewColors.Items.Insert(index, cloneToNew);
-			listViewColors.Alignment = ListViewAlignment.SnapToGrid;
-			Update_ColorOrder();
+			if (e.Effect == DragDropEffects.Copy)
+			{
+				Color c = (Color)e.Data.GetData(typeof (Color));
+				ListViewItem item = CreateColorListItem(c);
+				Point p = listViewColors.PointToClient(new Point(e.X, e.Y));
+				ListViewItem referenceItem = listViewColors.GetItemAt(p.X, p.Y);
+				if (referenceItem != null)
+				{
+					int index = referenceItem.Index;
+					listViewColors.Items.Insert(index, item);
+				}
+				else
+				{
+					listViewColors.Items.Add(item);
+				}
+				
+				listViewColors.Alignment = ListViewAlignment.SnapToGrid;
+				ListViewItem_SetSpacing(listViewColors, 48 + 5, 48 + 5);
+				Update_ColorOrder();
+				
+			}
+			else if (e.Effect == DragDropEffects.Move)
+			{
+				listViewColors.Alignment = ListViewAlignment.Default;
+				if (listViewColors.SelectedItems.Count == 0)
+					return;
+				Point p = listViewColors.PointToClient(new Point(e.X, e.Y));
+				ListViewItem movetoNewPosition = listViewColors.GetItemAt(p.X, p.Y);
+				if (movetoNewPosition == null) return;
+				ListViewItem dropToNewPosition = (e.Data.GetData(typeof(ListView.SelectedListViewItemCollection)) as ListView.SelectedListViewItemCollection)[0];
+				ListViewItem cloneToNew = (ListViewItem)dropToNewPosition.Clone();
+				int index = movetoNewPosition.Index;
+				listViewColors.Items.Remove(dropToNewPosition);
+				listViewColors.Items.Insert(index, cloneToNew);
+				listViewColors.Alignment = ListViewAlignment.SnapToGrid;
+				ListViewItem_SetSpacing(listViewColors, 48 + 5, 48 + 5);
+				Update_ColorOrder();	
+			}
+			
 		}
 
 
@@ -577,7 +683,15 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			if (e.Data.GetDataPresent(typeof(ListView.SelectedListViewItemCollection)))
 			{
 				e.Effect = DragDropEffects.Move;
+				return;
 			}
+			if (e.Data.GetDataPresent(typeof (Color)))
+			{
+				e.Effect = DragDropEffects.Copy;
+				return;
+			}
+			e.Effect = DragDropEffects.None;
+			
 		}
 
 		#endregion
@@ -586,24 +700,77 @@ namespace VixenModules.Editor.TimedSequenceEditor
 
 		private void listViewCurves_ItemDrag(object sender, ItemDragEventArgs e)
 		{
-			if (listViewCurves.SelectedItems == null)
-				return;
+			//StartCurveDrag(this, e);
+			Curve newCurve = new Curve((Curve)listViewCurves.SelectedItems[0].Tag);
+			if (LinkCurves)
+			{
+				newCurve.LibraryReferenceName = listViewCurves.SelectedItems[0].Name;
+			}
+			newCurve.IsCurrentLibraryCurve = false;
+			listViewCurves.DoDragDrop(newCurve, DragDropEffects.Copy);
+		}
 
-			StartCurveDrag(this, e);
-			listViewCurves.DoDragDrop(listViewCurves.SelectedItems[0].Name, DragDropEffects.Copy);
+		private void listViewCurves_DragEnter(object sender, DragEventArgs e)
+		{
+			if (e.Data.GetDataPresent(typeof(Curve)))
+			{
+				Curve c = (Curve)e.Data.GetData(typeof(Curve));
+				if (!c.IsLibraryReference)
+				{
+					e.Effect = DragDropEffects.Copy;
+					return;	
+				}
+			}
+			e.Effect = DragDropEffects.None;
+		}
+
+		private void listViewCurves_DragDrop(object sender, DragEventArgs e)
+		{
+			if (e.Effect == DragDropEffects.Copy)
+			{
+				Curve c = (Curve)e.Data.GetData(typeof(Curve));
+				AddCurveToLibrary(c, false);
+			}	
 		}
 
 		#endregion
 
 		#region Gradients
 
+		private void listViewGradients_DragDrop(object sender, DragEventArgs e)
+		{
+			if (e.Effect == DragDropEffects.Copy)
+			{
+				ColorGradient c = (ColorGradient)e.Data.GetData(typeof(ColorGradient));
+				AddGradientToLibrary(c, false);
+			}	
+		}
+
+		private void listViewGradients_DragEnter(object sender, DragEventArgs e)
+		{
+			if (e.Data.GetDataPresent(typeof(ColorGradient)))
+			{
+				ColorGradient cg = (ColorGradient)e.Data.GetData(typeof(ColorGradient));
+				if (!cg.IsLibraryReference)
+				{
+					e.Effect = DragDropEffects.Copy;
+					return;
+				}
+			}
+			e.Effect = DragDropEffects.None;
+		}
+
 		private void listViewGradient_ItemDrag(object sender, ItemDragEventArgs e)
 		{
-			if (listViewGradients.SelectedItems == null)
-				return;
+			//StartGradientDrag(this, e);
 
-			StartGradientDrag(this, e);
-			listViewGradients.DoDragDrop(listViewGradients.SelectedItems[0].Name, DragDropEffects.Copy);
+			ColorGradient newGradient = new ColorGradient((ColorGradient)listViewGradients.SelectedItems[0].Tag);
+			if (LinkGradients)
+			{
+				newGradient.LibraryReferenceName = listViewGradients.SelectedItems[0].Name;
+			}
+			newGradient.IsCurrentLibraryGradient = false;
+			listViewGradients.DoDragDrop(newGradient, DragDropEffects.Copy);
 		}
 
 		#endregion
@@ -642,7 +809,10 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			catch (Exception ex)
 			{
 				Logging.Error("While exporting Favorite Colors: " + saveFileDialog.FileName + " " + ex.InnerException);
-				MessageBox.Show(@"Unable to export data, please check the error log for details", @"Unable to export", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm("Unable to export data, please check the error log for details", "Unable to export", false, false);
+				messageBox.ShowDialog();
 			}
 		}
 
@@ -676,8 +846,10 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			catch (Exception ex)
 			{
 				Logging.Error("Invalid file while importing Favorite Colors: " + openFileDialog.FileName + " " + ex.InnerException);
-				MessageBox.Show(@"Sorry, we didn't reconize the data in that file as valid Favorite Color data.", @"Invalid file", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm("Sorry, we didn't reconize the data in that file as valid Favorite Color data.", "Invalid file", false, false);
+				messageBox.ShowDialog();
 			}
 			PopulateColors();
 			Save_ColorPaletteFile();
@@ -717,7 +889,10 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			catch (Exception ex)
 			{
 				Logging.Error("While exporting Curve Library: " + saveFileDialog.FileName + " " + ex.InnerException);
-				MessageBox.Show(@"Unable to export data, please check the error log for details", @"Unable to export", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm("Unable to export data, please check the error log for details", "Unable to export", false, false);
+				messageBox.ShowDialog();
 			}
 		}
 
@@ -760,8 +935,10 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			catch (Exception ex)
 			{
 				Logging.Error("Invalid file while importing Curve Library: " + openFileDialog.FileName + " " + ex.InnerException);
-				MessageBox.Show(@"Sorry, we didn't reconize the data in that file as valid Curve Library data.", @"Invalid file", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-					
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm("Sorry, we didn't reconize the data in that file as valid Curve Library data.", "Invalid file", false, false);
+				messageBox.ShowDialog();
 			}
 		}
 
@@ -800,7 +977,10 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			catch (Exception ex)
 			{
 				Logging.Error("While exporting Color Gradient Library: " + saveFileDialog.FileName + " " + ex.InnerException);
-				MessageBox.Show(@"Unable to export data, please check the error log for details", @"Unable to export", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm("Unable to export data, please check the error log for details.", "Unable to export", false, false);
+				messageBox.ShowDialog();
 			}
 		}
 
@@ -844,14 +1024,29 @@ namespace VixenModules.Editor.TimedSequenceEditor
 			catch (Exception ex)
 			{
 				Logging.Error("Invalid file while importing Color Gradient Library: " + openFileDialog.FileName + " " + ex.InnerException);
-				MessageBox.Show(@"Sorry, we didn't reconize the data in that file as valid Color Gradient Library data.", @"Invalid file", MessageBoxButtons.OK, MessageBoxIcon.Warning);
-
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm("Sorry, we didn't reconize the data in that file as valid Color Gradient Library data.", "Invalid file", false, false);
+				messageBox.ShowDialog();
 			}
 		}
 
 		#endregion
 
-		#endregion
+		private void Form_ToolPalette_FormClosing(object sender, FormClosingEventArgs e)
+		{
+			if (_curveLibrary != null)
+			{
+				_curveLibrary.CurveChanged -= CurveLibrary_CurveChanged;
+			}
+			if (_colorGradientLibrary != null)
+			{
+				_colorGradientLibrary.GradientChanged -= GradientLibrary_GradientChanged;
+			}
+		}
 
+		
+
+		#endregion
 	}
 }

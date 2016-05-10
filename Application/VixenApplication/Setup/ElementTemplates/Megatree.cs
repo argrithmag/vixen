@@ -6,6 +6,9 @@ using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
+using Common.Controls;
+using Common.Controls.Theme;
+using Common.Resources.Properties;
 using NLog;
 using Vixen.Rule;
 using Vixen.Services;
@@ -13,7 +16,7 @@ using Vixen.Sys;
 
 namespace VixenApplication.Setup.ElementTemplates
 {
-	public partial class Megatree : Form, IElementTemplate
+	public partial class Megatree : BaseForm, IElementTemplate
 	{
 		private static Logger Logging = LogManager.GetCurrentClassLogger();
 
@@ -25,6 +28,10 @@ namespace VixenApplication.Setup.ElementTemplates
 		public Megatree()
 		{
 			InitializeComponent();
+			Icon = Resources.Icon_Vixen3;
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			ThemeUpdateControls.UpdateControls(this);
 
 			treename = "Megatree";
 			stringcount = 16;
@@ -106,6 +113,19 @@ namespace VixenApplication.Setup.ElementTemplates
 			stringcount = Decimal.ToInt32(numericUpDownStrings.Value);
 			pixeltree = checkBoxPixelTree.Checked ;
 			pixelsperstring = Decimal.ToInt32(numericUpDownPixelsPerString.Value);
+		}
+
+		private void buttonBackground_MouseHover(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImageHover;
+		}
+
+		private void buttonBackground_MouseLeave(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImage;
+
 		}
 	}
 }

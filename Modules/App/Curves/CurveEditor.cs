@@ -2,27 +2,34 @@
 using System.Collections.Generic;
 using System.Drawing;
 using System.Windows.Forms;
+using Common.Controls;
+using Common.Resources.Properties;
 using Vixen.Module.App;
 using Vixen.Services;
 using ZedGraph;
 using System.Linq;
+using Common.Controls.Theme;
 
 namespace VixenModules.App.Curves
 {
-	public partial class CurveEditor : Form
+	public partial class CurveEditor : BaseForm
 	{
 		public CurveEditor()
 		{
 			InitializeComponent();
-			Icon = Common.Resources.Properties.Resources.Icon_Vixen3;
+			Icon = Resources.Icon_Vixen3;
+
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			ThemeUpdateControls.UpdateControls(this);
 
 			zedGraphControl.GraphPane.XAxis.MajorGrid.IsVisible = true;
-			zedGraphControl.GraphPane.XAxis.MajorGrid.Color = Color.Gray;
+			zedGraphControl.GraphPane.XAxis.MajorGrid.Color = ThemeColorTable.GroupBoxBorderColor;
 			zedGraphControl.GraphPane.XAxis.MajorGrid.DashOff = 4;
 			zedGraphControl.GraphPane.XAxis.MajorGrid.DashOn = 2;
 
 			zedGraphControl.GraphPane.YAxis.MajorGrid.IsVisible = true;
-			zedGraphControl.GraphPane.YAxis.MajorGrid.Color = Color.Gray;
+			zedGraphControl.GraphPane.YAxis.MajorGrid.Color = ThemeColorTable.GroupBoxBorderColor;
 			zedGraphControl.GraphPane.YAxis.MajorGrid.DashOff = 4;
 			zedGraphControl.GraphPane.YAxis.MajorGrid.DashOn = 2;
 
@@ -39,8 +46,8 @@ namespace VixenModules.App.Curves
 			zedGraphControl.GraphPane.Legend.IsVisible = false;
 			zedGraphControl.GraphPane.Title.IsVisible = false;
 
-			zedGraphControl.GraphPane.Fill = new Fill(SystemColors.Control);
-			zedGraphControl.GraphPane.Border = new Border(SystemColors.Control, 0);
+			zedGraphControl.GraphPane.Fill = new Fill(ThemeColorTable.BackgroundColor);
+			zedGraphControl.GraphPane.Border = new Border(ThemeColorTable.BackgroundColor, 0);
 
 			zedGraphControl.GraphPane.AxisChange();
 		}
@@ -139,6 +146,23 @@ namespace VixenModules.App.Curves
 					PointPairList pointList = zedGraphControl.GraphPane.CurveList[0].Points as PointPairList;
 					double newX, newY;
 					zedGraphControl.GraphPane.ReverseTransform(e.Location, out newX, out newY);
+					//Verify the point is in the usable bounds.
+					if (newX > 100)
+					{
+						newX = 100;
+					}
+					else if(newX < 0)
+					{
+						newX = 0;
+					}
+					if (newY > 100)
+					{
+						newY = 100;
+					}
+					else if (newY < 0)
+					{
+						newY = 0;
+					}
 					pointList.Insert(0, newX, newY);
 					pointList.Sort();
 					zedGraphControl.Invalidate();
@@ -172,6 +196,20 @@ namespace VixenModules.App.Curves
 
 		private void PopulateFormWithCurve(Curve curve)
 		{
+			zedGraphControl.GraphPane.Chart.Fill = new Fill(ThemeColorTable.BackgroundColor);
+			zedGraphControl.GraphPane.Chart.Border.Color = ThemeColorTable.GroupBoxBorderColor;
+			zedGraphControl.GraphPane.XAxis.MajorGrid.Color = ThemeColorTable.GroupBoxBorderColor;
+			zedGraphControl.GraphPane.XAxis.MinorGrid.Color = ThemeColorTable.GroupBoxBorderColor;
+			zedGraphControl.GraphPane.XAxis.MajorTic.Color = ThemeColorTable.GroupBoxBorderColor;
+			zedGraphControl.GraphPane.XAxis.MinorTic.Color = ThemeColorTable.GroupBoxBorderColor;
+			zedGraphControl.GraphPane.YAxis.MajorGrid.Color = ThemeColorTable.GroupBoxBorderColor;
+			zedGraphControl.GraphPane.YAxis.MinorGrid.Color = ThemeColorTable.GroupBoxBorderColor;
+			zedGraphControl.GraphPane.YAxis.MajorTic.Color = ThemeColorTable.GroupBoxBorderColor;
+			zedGraphControl.GraphPane.YAxis.MinorTic.Color = ThemeColorTable.GroupBoxBorderColor;
+			zedGraphControl.GraphPane.Title.FontSpec.FontColor = ThemeColorTable.ForeColor;
+			zedGraphControl.GraphPane.XAxis.Scale.FontSpec.FontColor = ThemeColorTable.ForeColor;
+			zedGraphControl.GraphPane.YAxis.Scale.FontSpec.FontColor = ThemeColorTable.ForeColor;
+
 			// if we're editing a curve from the library, treat it special
 			if (curve.IsCurrentLibraryCurve) {
 				zedGraphControl.GraphPane.CurveList.Clear();
@@ -202,7 +240,7 @@ namespace VixenModules.App.Curves
 				txtXValue.Text = string.Empty;
 				txtYValue.Text = string.Empty;
 				btnUpdateCoordinates.Enabled = false;
-				zedGraphControl.GraphPane.Chart.Fill = new Fill(Color.AliceBlue);
+				
 			}
 			else {
 				if (curve.IsLibraryReference) {
@@ -234,8 +272,7 @@ namespace VixenModules.App.Curves
 				txtXValue.Text = string.Empty;
 				txtYValue.Text = string.Empty;
 				btnUpdateCoordinates.Enabled = false;
-				zedGraphControl.GraphPane.Chart.Fill = new Fill(SystemColors.Control);
-
+				
 				Text = "Curve Editor";
 			}
 
@@ -260,18 +297,23 @@ namespace VixenModules.App.Curves
 
 			while (dialog.ShowDialog() == DialogResult.OK) {
 				if (dialog.Response == string.Empty) {
-					MessageBox.Show("Please enter a name.");
+					//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+					MessageBoxForm.msgIcon = SystemIcons.Error; //this is used if you want to add a system icon to the message form.
+					var messageBox = new MessageBoxForm("Please enter a name.", "Curve Name", false, false);
+					messageBox.ShowDialog();
 					continue;
 				}
 
 				if (Library.Contains(dialog.Response)) {
-					DialogResult result = MessageBox.Show("There is already a curve with that name. Do you want to overwrite it?",
-					                                      "Overwrite curve?", MessageBoxButtons.YesNoCancel);
-					if (result == DialogResult.Yes) {
+					//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+					MessageBoxForm.msgIcon = SystemIcons.Question; //this is used if you want to add a system icon to the message form.
+					var messageBox = new MessageBoxForm("There is already a curve with that name. Do you want to overwrite it?", "Overwrite curve?", true, true);
+					messageBox.ShowDialog();
+					if (messageBox.DialogResult == DialogResult.OK) {
 						Library.AddCurve(dialog.Response, new Curve(Curve));
 						break;
 					}
-					else if (result == DialogResult.Cancel) {
+					if (messageBox.DialogResult == DialogResult.Cancel) {
 						break;
 					}
 				}
@@ -335,6 +377,24 @@ namespace VixenModules.App.Curves
 			zedGraphControl.DragEditingPair.X = Convert.ToDouble(txtXValue.Text);
 			zedGraphControl.DragEditingPair.Y = Convert.ToDouble(txtYValue.Text);
 			zedGraphControl.Invalidate();
+		}
+
+		private void buttonBackground_MouseHover(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImageHover;
+		}
+
+		private void buttonBackground_MouseLeave(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImage;
+
+		}
+
+		private void groupBoxes_Paint(object sender, PaintEventArgs e)
+		{
+			ThemeGroupBoxRenderer.GroupBoxesDrawBorder(sender, e, Font);
 		}
 	}
 }

@@ -6,10 +6,13 @@ using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
+using Common.Controls;
+using Common.Controls.Theme;
+using Common.Resources.Properties;
 
 namespace VixenModules.Output.K8055_Controller
 {
-	public partial class Setup : Form
+	public partial class Setup : BaseForm
 	{
 		private K8055ControlModule[] _modules;
 		private K8055Data _data;
@@ -17,6 +20,9 @@ namespace VixenModules.Output.K8055_Controller
 		public Setup(int channelCount, K8055Data data)
 		{
 			InitializeComponent();
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			ThemeUpdateControls.UpdateControls(this);
 			_data = data;
 			int numberofChannels = 0;
 			
@@ -112,7 +118,10 @@ namespace VixenModules.Output.K8055_Controller
 			}
 			if ((deviceNum & 15L) == 0L)
 			{
-				MessageBox.Show("No devices were found.", "Vixen", MessageBoxButtons.OK, MessageBoxIcon.Exclamation);
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Exclamation; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm("No devices were found.", "Vixen", false, false);
+				messageBox.ShowDialog();
 			}
 		}
 
@@ -187,6 +196,23 @@ namespace VixenModules.Output.K8055_Controller
 
 			_data.Modules = _modules;
 
+		}
+
+		private void buttonBackground_MouseHover(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImageHover;
+		}
+
+		private void buttonBackground_MouseLeave(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImage;
+		}
+
+		private void groupBoxes_Paint(object sender, PaintEventArgs e)
+		{
+			ThemeGroupBoxRenderer.GroupBoxesDrawBorder(sender, e, Font);
 		}
 	}
 }

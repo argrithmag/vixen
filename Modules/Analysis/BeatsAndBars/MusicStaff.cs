@@ -8,12 +8,13 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Common.Controls.Theme;
 
 namespace VixenModules.Analysis.BeatsAndBars
 {
 	public partial class MusicStaff : UserControl
 	{
-		private const int TSLABEL_XOFFSET = 85;
+		private const int TSLABEL_XOFFSET = 80;
 		private const int FIRST_BAR_OFFSET = TSLABEL_XOFFSET + 35;
 		private const int DIV_Y_OFFSET = 20;
 		private const int VAL_LABEL_OFFSET = 25;
@@ -24,15 +25,18 @@ namespace VixenModules.Analysis.BeatsAndBars
 		public MusicStaff()
 		{
 			InitializeComponent();
+
 			BeatsPerBar = 4;
 			//NoteSize = 4;
-
-			BeatsPerBarLabel.BackColor = Color.Transparent;
-			NoteSizeLabel.BackColor = Color.Transparent;
 
 			BPMLabelVal.TextAlign = ContentAlignment.MiddleLeft;
 			BarPeriodLabelVal.TextAlign = ContentAlignment.MiddleLeft;
 			DivTimeLabelVal.TextAlign = ContentAlignment.MiddleLeft;
+			BeatsPerBarLabel.Font = new Font(SystemFonts.MessageBoxFont.FontFamily, 12F, FontStyle.Bold);
+			NoteSizeLabel.Font = new Font(SystemFonts.MessageBoxFont.FontFamily, 12F, FontStyle.Bold);
+			BPMLabel.Font = new Font(SystemFonts.MessageBoxFont.FontFamily, SystemFonts.MessageBoxFont.Size, FontStyle.Bold);
+			BarPeriodLabel.Font = new Font(SystemFonts.MessageBoxFont.FontFamily, SystemFonts.MessageBoxFont.Size, FontStyle.Bold);
+			DivTimeLabel.Font = new Font(SystemFonts.MessageBoxFont.FontFamily, SystemFonts.MessageBoxFont.Size, FontStyle.Bold);
 
 		}
 

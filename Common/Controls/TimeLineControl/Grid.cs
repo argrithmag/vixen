@@ -9,6 +9,7 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Common.Controls.Theme;
 using NLog;
 using Vixen;
 using Vixen.Execution.Context;
@@ -61,10 +62,10 @@ namespace Common.Controls.Timeline
 			AllowGridResize = true;
 			AutoScrollMargin = new Size(24, 24);
 			TotalTime = TimeSpan.FromMinutes(1);
-			RowSeparatorColor = Color.Black;
-			MajorGridlineColor = Color.FromArgb(120, 120, 120);
+			RowSeparatorColor = ThemeColorTable.TimeLineGridColor;
+			MajorGridlineColor = ThemeColorTable.TimeLineGridColor;
 			GridlineInterval = TimeSpan.FromSeconds(1.0);
-			BackColor = Color.FromArgb(60, 60, 60);
+			BackColor = ThemeColorTable.TimeLineEffectsBackColor;
 			SelectionColor = Color.FromArgb(100, 40, 100, 160);
 			SelectionBorder = Color.Blue;
 			DrawColor = Color.FromArgb(100, 255, 255, 255);
@@ -91,13 +92,16 @@ namespace Common.Controls.Timeline
 
 			// Drag & Drop
 			AllowDrop = true;
-			DragEnter += TimelineGrid_DragEnter;
-			DragDrop += TimelineGrid_DragDrop;
+			//DragEnter += TimelineGrid_DragEnter;
+			//DragDrop += TimelineGrid_DragDrop;
+			//DragOver += TimelineGrid_DragOver;
 			StartBackgroundRendering();
 			CurrentDragSnapPoints = new SortedDictionary<TimeSpan, List<SnapDetails>>();
 			EnableSnapTo = true;
 			SnapStrength = 2;
 		}
+
+		
 
 		protected override void Dispose(bool disposing)
 		{
@@ -194,6 +198,8 @@ namespace Common.Controls.Timeline
 		public bool SuppressInvalidate { get; set; }
 
 		public bool SupressRendering { get; set; }
+
+		public bool SupressSelectionEvents { get; set; }
 
 		public int VerticalOffset
 		{
@@ -333,6 +339,7 @@ namespace Common.Controls.Timeline
 
 		private void _SelectionChanged()
 		{
+			if (SupressSelectionEvents) return;
 			if (SelectionChanged != null)
 				SelectionChanged(this, EventArgs.Empty);
 		}
@@ -683,7 +690,7 @@ namespace Common.Controls.Timeline
 
 			foreach (Element elem in elements)
 			{
-				if (elem.Row.SelectedElements.Count() > 4)
+				if (elem.Row.SelectedElements.Count() > 32)
 					return false;
 			}
 			return true;
@@ -699,7 +706,11 @@ namespace Common.Controls.Timeline
 		{
 			if (!OkToUseAlignmentHelper(elements))
 			{
-				MessageBox.Show(alignmentHelperWarning);
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm(alignmentHelperWarning,
+					"Warning", false, false);
+				messageBox.ShowDialog();
 				return;
 			}
 
@@ -719,7 +730,7 @@ namespace Common.Controls.Timeline
 						: new Tuple<TimeSpan, TimeSpan>(referenceElement.StartTime, selectedElement.EndTime));
 			}
 
-			MoveResizeElements(elementsToAlign, ElementMoveType.Align);
+			MoveResizeElements(elementsToAlign, ElementMoveType.AlignStart);
 		}
 
 		/// <summary>
@@ -732,7 +743,11 @@ namespace Common.Controls.Timeline
 		{
 			if (!OkToUseAlignmentHelper(elements))
 			{
-				MessageBox.Show(alignmentHelperWarning);
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm(alignmentHelperWarning,
+					"Warning", false, false);
+				messageBox.ShowDialog();
 				return;
 			}
 
@@ -752,7 +767,7 @@ namespace Common.Controls.Timeline
 						: new Tuple<TimeSpan, TimeSpan>(selectedElement.StartTime, referenceElement.EndTime));
 			}
 
-			MoveResizeElements(elementsToAlign, ElementMoveType.Align);
+			MoveResizeElements(elementsToAlign, ElementMoveType.AlignEnd);
 		}
 
 		/// <summary>
@@ -765,7 +780,11 @@ namespace Common.Controls.Timeline
 		{
 			if (!OkToUseAlignmentHelper(elements))
 			{
-				MessageBox.Show(alignmentHelperWarning);
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm(alignmentHelperWarning,
+					"Warning", false, false);
+				messageBox.ShowDialog();
 				return;
 			}
 
@@ -779,7 +798,7 @@ namespace Common.Controls.Timeline
 						: new Tuple<TimeSpan, TimeSpan>(selectedElement.StartTime, selectedElement.StartTime + referenceElement.Duration));
 			}
 
-			MoveResizeElements(elementsToAlign, ElementMoveType.Align);
+			MoveResizeElements(elementsToAlign, ElementMoveType.AlignDurations);
 		}
 
 		/// <summary>
@@ -791,7 +810,11 @@ namespace Common.Controls.Timeline
 		{
 			if (!OkToUseAlignmentHelper(elements))
 			{
-				MessageBox.Show(alignmentHelperWarning);
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm(alignmentHelperWarning,
+					"Warning", false, false);
+				messageBox.ShowDialog();
 				return;
 			}
 
@@ -802,7 +825,7 @@ namespace Common.Controls.Timeline
 				elementsToAlign.Add(selectedElement, new Tuple<TimeSpan, TimeSpan>(referenceElement.StartTime, referenceElement.EndTime));
 			}
 
-			MoveResizeElements(elementsToAlign, ElementMoveType.Align);
+			MoveResizeElements(elementsToAlign, ElementMoveType.AlignBoth);
 		}
 
 		/// <summary>
@@ -815,7 +838,11 @@ namespace Common.Controls.Timeline
 		{
 			if (!OkToUseAlignmentHelper(elements))
 			{
-				MessageBox.Show(alignmentHelperWarning);
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm(alignmentHelperWarning,
+					"Warning", false, false);
+				messageBox.ShowDialog();
 				return;
 			}
 
@@ -832,7 +859,7 @@ namespace Common.Controls.Timeline
 				elementsToAlign.Add(selectedElement, new Tuple<TimeSpan, TimeSpan>(startTime, endTime));
 			}
 
-			MoveResizeElements(elementsToAlign, ElementMoveType.Align);
+			MoveResizeElements(elementsToAlign, ElementMoveType.AlignStartToEnd);
 		}
 
 		/// <summary>
@@ -845,7 +872,11 @@ namespace Common.Controls.Timeline
 		{
 			if (!OkToUseAlignmentHelper(elements))
 			{
-				MessageBox.Show(alignmentHelperWarning);
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm(alignmentHelperWarning,
+					"Warning", false, false);
+				messageBox.ShowDialog();
 				return;
 			}
 
@@ -862,7 +893,7 @@ namespace Common.Controls.Timeline
 				elementsToAlign.Add(selectedElement, new Tuple<TimeSpan, TimeSpan>(startTime, endTime));
 			}
 
-			MoveResizeElements(elementsToAlign, ElementMoveType.Align);
+			MoveResizeElements(elementsToAlign, ElementMoveType.AlignEndToStart);
 		}
 
 		/// <summary>
@@ -874,7 +905,11 @@ namespace Common.Controls.Timeline
 		{
 			if (!OkToUseAlignmentHelper(elements))
 			{
-				MessageBox.Show(alignmentHelperWarning);
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm(alignmentHelperWarning,
+					"Warning", false, false);
+				messageBox.ShowDialog();
 				return;
 			}
 
@@ -887,7 +922,7 @@ namespace Common.Controls.Timeline
 				elementsToAlign.Add(selectedElement, new Tuple<TimeSpan, TimeSpan>(TimeSpan.FromSeconds(thisStartTime), TimeSpan.FromSeconds(thisStartTime) + selectedElement.Duration));
 			}
 
-			MoveResizeElements(elementsToAlign, ElementMoveType.Align);
+			MoveResizeElements(elementsToAlign, ElementMoveType.AlignCenters);
 		}
 
 		/// <summary>
@@ -917,9 +952,12 @@ namespace Common.Controls.Timeline
 		{
 			if (!SelectedElements.Any())
 			{
-				var result = MessageBox.Show(@"This action will apply to your entire sequence, are you sure ?",
-					@"Close element gaps", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-				if (result == DialogResult.No) return;
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm("This action will apply to your entire sequence, are you sure ?",
+					@"Close element gaps", true, false);
+				messageBox.ShowDialog();
+				if (messageBox.DialogResult == DialogResult.No) return;
 			}
 
 			Dictionary<Element, Tuple<TimeSpan, TimeSpan>> moveElements = new Dictionary<Element, Tuple<TimeSpan, TimeSpan>>();
@@ -1105,6 +1143,31 @@ namespace Common.Controls.Timeline
 			}
 
 			return containingRow;
+		}
+
+		public Element ElementAtPosition(Point p)
+		{
+			Point client = PointToClient(p);
+			Point gridPoint = TranslateLocation(client);
+			return elementAt(gridPoint);
+		}
+
+		public Row RowAtPosition(Point p)
+		{
+			Point client = PointToClient(p);
+			Point gridPoint = TranslateLocation(client);
+			return rowAt(gridPoint);
+		}
+
+		public Point GridPoint(Point p)
+		{
+			Point client = PointToClient(p);
+			return TranslateLocation(client);
+		}
+
+		public TimeSpan TimeAtPosition(Point p)
+		{
+			return PixelsToTime(GridPoint(p).X);
 		}
 
 		/// <summary>
@@ -1773,18 +1836,20 @@ namespace Common.Controls.Timeline
 			foreach (KeyValuePair<TimeSpan, List<SnapDetails>> kvp in StaticSnapPoints) {
 				newPoints[kvp.Key] = new List<SnapDetails>();
 				foreach (SnapDetails details in kvp.Value) {
-					newPoints[kvp.Key].Add(CalculateSnapDetailsForPoint(details.SnapTime, details.SnapLevel, details.SnapColor));
+					newPoints[kvp.Key].Add(CalculateSnapDetailsForPoint(details.SnapTime, details.SnapLevel, details.SnapColor, details.SnapBold, details.SnapSolidLine));
 				}
 			}
 			StaticSnapPoints = newPoints;
 		}
 
-		private SnapDetails CalculateSnapDetailsForPoint(TimeSpan snapTime, int level, Color color)
+		private SnapDetails CalculateSnapDetailsForPoint(TimeSpan snapTime, int level, Color color, bool lineBold, bool solidLine)
 		{
 			SnapDetails result = new SnapDetails();
 			result.SnapLevel = level;
 			result.SnapTime = snapTime;
 			result.SnapColor = color;
+			result.SnapBold = lineBold;
+			result.SnapSolidLine = solidLine;
 
 			// the start time and end times for specified points are 2 pixels
 			// per snap level away from the snap time.
@@ -1793,12 +1858,12 @@ namespace Common.Controls.Timeline
 			return result;
 		}
 
-		public void AddSnapPoint(TimeSpan snapTime, int level, Color color)
+		public void AddSnapPoint(TimeSpan snapTime, int level, Color color, bool lineBold, bool solidLine)
 		{
 			if (!StaticSnapPoints.ContainsKey(snapTime))
-				StaticSnapPoints.Add(snapTime, new List<SnapDetails> {CalculateSnapDetailsForPoint(snapTime, level, color)});
+				StaticSnapPoints.Add(snapTime, new List<SnapDetails> {CalculateSnapDetailsForPoint(snapTime, level, color, lineBold, solidLine)});
 			else
-				StaticSnapPoints[snapTime].Add(CalculateSnapDetailsForPoint(snapTime, level, color));
+				StaticSnapPoints[snapTime].Add(CalculateSnapDetailsForPoint(snapTime, level, color, lineBold, solidLine));
 
 			if (!SuppressInvalidate) Invalidate();
 		}
@@ -1868,10 +1933,52 @@ namespace Common.Controls.Timeline
 			_SelectionChanged();
 		}
 
+		public void SelectElements(IEnumerable<Element> elements)
+		{
+			elements.All(x => x.Selected = true);
+			_SelectionChanged();
+		}
+
 		public void ToggleElementSelection(Element element)
 		{
 			element.Selected = !element.Selected;
 			_SelectionChanged();
+		}
+
+		public void ToggleSelectedRows(bool includeChildren)
+		{
+			SuppressInvalidate = true;
+			AllowGridResize = false;
+			if (SelectedRows.Any())
+			{
+				foreach (var selectedRow in SelectedRows)
+				{
+					if (includeChildren)
+					{
+						selectedRow.ToggleTree(!selectedRow.TreeOpen);
+					}
+					else
+					{
+						selectedRow.TreeOpen = !selectedRow.TreeOpen;
+					}
+				}
+			}
+			else if (ActiveRow != null)
+			{
+				if (includeChildren)
+				{
+					ActiveRow.ToggleTree(!ActiveRow.TreeOpen);
+				}
+				else
+				{
+					ActiveRow.TreeOpen = !ActiveRow.TreeOpen;
+				}
+			}
+
+			SuppressInvalidate = false;
+			AllowGridResize = true;
+			ResizeGridHeight();
+			Invalidate();
 		}
 
 		#endregion
@@ -1955,9 +2062,13 @@ namespace Common.Controls.Timeline
 						if (details == null || (d.SnapLevel > details.SnapLevel && d.SnapColor != Color.Empty))
 							details = d;
 					}
-					p = new Pen(details.SnapColor);
+					int lineBold = 1;
+					if (details.SnapBold)
+						lineBold = 3;
+					p = new Pen(details.SnapColor, lineBold);
 					Single x = timeToPixels(kvp.Key);
-					p.DashPattern = new float[] {details.SnapLevel, details.SnapLevel};
+					if (!details.SnapSolidLine)
+						p.DashPattern = new float[] {details.SnapLevel, details.SnapLevel};
 					g.DrawLine(p, x, 0, x, AutoScrollMinSize.Height);
 					p.Dispose();
 				}
@@ -2182,8 +2293,8 @@ namespace Common.Controls.Timeline
 			if (width <= 0) return;
 			Size size = new Size(width, currentElement.DisplayHeight);
 
-			Bitmap elementImage = currentElement.Draw(size, g, VisibleTimeStart, VisibleTimeEnd, (int)timeToPixels(currentElement.Duration),redBorder); 
-			
+			Bitmap elementImage = currentElement.Draw(size, g, VisibleTimeStart, VisibleTimeEnd, (int)timeToPixels(currentElement.Duration),redBorder);
+			if (elementImage == null) return;
 			Point finalDrawLocation = new Point((int)Math.Floor(timeToPixels(currentElement.StartTime>VisibleTimeStart?currentElement.StartTime:VisibleTimeStart)), currentElement.DisplayTop);
 			
 			Rectangle destRect = new Rectangle(finalDrawLocation.X, finalDrawLocation.Y, size.Width, currentElement.DisplayHeight);
@@ -2198,11 +2309,15 @@ namespace Common.Controls.Timeline
 			if (capturedElements.Any())
 			{
 				Element element = capturedElements.First();
+				if (element == null) return;
 				//This element may be part of more than one row. So it's internal Display rect can be wrong thus
 				//placing the info tool tip in the wrong place
 				//Until that is fixed which is a bigger effort lets use our current row for part of the rectangle.
 				Row row = rowAt(m_lastGridLocation);
-				element.DrawInfo(g, new Rectangle(element.DisplayRect.X, row.DisplayTop, element.DisplayRect.Width, row.Height));
+				if (row != null) //null check to prevent mouse off screen locations trying to find a row.
+				{
+					element.DrawInfo(g, new Rectangle(element.DisplayRect.X, row.DisplayTop, element.DisplayRect.Width, row.Height));
+				}
 			}
 		}
 
@@ -2337,70 +2452,16 @@ namespace Common.Controls.Timeline
 				}
 				catch (Exception ex) {
 					Logging.Error("Exception in TimelineGrid.OnPaint()",ex);
-					MessageBox.Show(@"An unexpected error occured while drawing the grid. Please notify the Vixen team and provide the error logs.");
+					//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+					MessageBoxForm.msgIcon = SystemIcons.Error; //this is used if you want to add a system icon to the message form.
+					var messageBox = new MessageBoxForm("An unexpected error occured while drawing the grid. Please notify the Vixen team and provide the error logs.",
+						@"Error", false, false);
+					messageBox.ShowDialog();
 				}
 		}
 
 		#endregion
 
-		#region External Drag/Drop
-
-		private void TimelineGrid_DragDrop(object sender, DragEventArgs e)
-		{
-			Point client = PointToClient(new Point(e.X, e.Y));
-			Point gridPoint = translateLocation(client);
-
-			Row row = rowAt(gridPoint);
-			TimeSpan time = pixelsToTime(gridPoint.X);
-			IDataObject data = e.Data;
-
-			if (DataDropped != null)
-				if (!isColorDrop && !isCurveDrop && !isGradientDrop)
-					DataDropped(this, new TimelineDropEventArgs(row, time, data));
-				else
-				{
-					if (isColorDrop)
-					{
-						isColorDrop = false;
-						
-						if (elementAt(gridPoint) == null)
-							return;
-
-						ColorDropped(this, new ToolDropEventArgs(row, time, elementAt(gridPoint), data,MouseButtonDown));
-					}
-					if (isCurveDrop)
-					{
-						isCurveDrop = false;
-
-						if (elementAt(gridPoint) == null)
-							return;
-
-						CurveDropped(this, new ToolDropEventArgs(row, time, elementAt(gridPoint), data, MouseButtonDown));
-					}
-					if (isGradientDrop)
-					{
-						isGradientDrop = false;
-
-						if (elementAt(gridPoint) == null)
-							return;
-
-						GradientDropped(this, new ToolDropEventArgs(row, time, elementAt(gridPoint), data, MouseButtonDown));
-					}
-				}
-		}
-
-		private void TimelineGrid_DragEnter(object sender, DragEventArgs e)
-		{
-			e.Effect = DragDropEffects.Copy;
-			MouseButtonDown = Control.MouseButtons; //We need to know which mouse button is down on DragEnter, Buttons are not down in DragDrop so we get it here.
-		}
-
-		internal event EventHandler<TimelineDropEventArgs> DataDropped;
-		internal event EventHandler<ToolDropEventArgs> ColorDropped;
-		internal event EventHandler<ToolDropEventArgs> CurveDropped;
-		internal event EventHandler<ToolDropEventArgs> GradientDropped;
-
-		#endregion
 	}
 
 	public class SnapDetails
@@ -2411,6 +2472,8 @@ namespace Common.Controls.Timeline
 		public int SnapLevel; // the "priority" of this snap point; bigger is higher priority
 		public Row SnapRow; // the rows that this point should affect; null if all rows
 		public Color SnapColor; // the color to draw the snap point
+		public bool SnapBold; // snap point is bold
+		public bool SnapSolidLine; // snap point is a solidline or dotted
 	}
 
 

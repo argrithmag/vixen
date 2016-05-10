@@ -6,6 +6,7 @@ using System.Windows.Forms;
 using System.Diagnostics;
 using System.IO;
 using System.Xml.Serialization;
+using Common.Controls.Theme;
 using Common.Resources;
 using Common.Resources.Properties;
 using Vixen.Module.Editor;
@@ -17,15 +18,27 @@ namespace VixenModules.App.Shows
 {
 	public partial class SequenceTypeEditor : TypeEditorBase
 	{
-		public ShowItem _showItem;
+		public static ShowItem _showItem;
+		public static Label ContolLabel1;
+		public static Label ContolLabelSequence;
+		public static TextBox ContolTextBoxSequence;
+		public static Button ContolButtonSelectSequence;
 
 		public SequenceTypeEditor(ShowItem showItem)
 		{
 			InitializeComponent();
+
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			
+			ContolLabel1 = label1;
+			ContolLabelSequence = labelSequence;
+			ContolTextBoxSequence = textBoxSequence;
+			ContolButtonSelectSequence = buttonSelectSequence;
 			
 			buttonSelectSequence.Image = Tools.GetIcon(Resources.folder_explore, 16);
 			buttonSelectSequence.Text = "";
-
+			ThemeUpdateControls.UpdateControls(this);
 			_showItem = showItem;
 		}
 

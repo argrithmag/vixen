@@ -7,15 +7,21 @@ using System.Linq;
 using System.Text;
 using System.Windows.Forms;
 using System.Globalization;
+using Common.Controls;
+using Common.Controls.Theme;
+using Common.Resources.Properties;
 
 namespace VixenModules.Editor.TimedSequenceEditor
 {
-	public partial class EffectTimeEditor : Form
+	public partial class EffectTimeEditor : BaseForm
 	{
 		private const string timeFormat = @"mm\:ss\.fff";
 		public EffectTimeEditor(TimeSpan start, TimeSpan duration)
 		{
 			InitializeComponent();
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			ThemeUpdateControls.UpdateControls(this);
 			Start = start;
 			Duration = duration;
 		}
@@ -152,6 +158,18 @@ namespace VixenModules.Editor.TimedSequenceEditor
 				btnOk.Enabled = false;
 			}
 		}
-		
+
+		private void buttonBackground_MouseHover(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImageHover;
+		}
+
+		private void buttonBackground_MouseLeave(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.ButtonBackgroundImage;
+
+		}
 	}
 }

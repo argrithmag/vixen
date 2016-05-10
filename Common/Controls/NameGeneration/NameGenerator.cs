@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Forms;
 using Common.Controls.NameGeneration;
+using Common.Controls.Theme;
 using Common.Resources;
 using Vixen.Rule;
 using Vixen.Rule.Name;
@@ -10,11 +11,13 @@ using System.Drawing;
 
 namespace Common.Controls
 {
-	public partial class NameGenerator : Form
+	public partial class NameGenerator : BaseForm
 	{
 		private List<string> OldNames { get; set; }
 
 		private int _fixedCount;
+
+		private string SelectedGroupName;
 
 		private int FixedCount
 		{
@@ -47,27 +50,41 @@ namespace Common.Controls
 			buttonAddNewRule.Text = "";
 			buttonDeleteRule.Image = Tools.GetIcon(Resources.Properties.Resources.delete, 16);
 			buttonDeleteRule.Text = "";
+			ForeColor = ThemeColorTable.ForeColor;
+			BackColor = ThemeColorTable.BackgroundColor;
+			ThemeUpdateControls.UpdateControls(this);
 
 			Generators = new List<INamingGenerator>();
 
 			listViewNames.Columns.Clear();
 			listViewNames.Columns.Add(new ColumnHeader {Text = "Name"});
+			labelColumnHeader1.Text = "Name";
+			labelColumnHeader2.Text = "";
 		}
 
 		public NameGenerator(IEnumerable<string> oldNames)
 			: this()
 		{
+			SelectedGroupName = "NewName";
 			OldNames = new List<string>(oldNames);
 			FixedCount = OldNames.Count();
 			listViewNames.Columns.Clear();
 			listViewNames.Columns.Add(new ColumnHeader {Text = "Old Name"});
-			listViewNames.Columns.Add(new ColumnHeader {Text = "New Name"});
+			listViewNames.Columns.Add(new ColumnHeader { Text = "New Name" });
+			labelColumnHeader1.Text = "Old Name";
+			labelColumnHeader2.Text = "New Name";
 		}
 
 		public NameGenerator(int fixedCount)
 			: this()
 		{
 			FixedCount = fixedCount;
+		}
+
+		public NameGenerator(string selectedGroupName)
+			: this()
+		{
+			SelectedGroupName = selectedGroupName;
 		}
 
 		private void BulkRename_Load(object sender, EventArgs e)
@@ -157,7 +174,7 @@ namespace Common.Controls
 
 		private void LoadNamingTemplate(INamingTemplate template)
 		{
-			textBoxNameFormat.Text = template.Format;
+			textBoxNameFormat.Text =  SelectedGroupName + template.Format;
 
 			Generators.Clear();
 			foreach (INamingGenerator generator in template.Generators) {
@@ -272,7 +289,11 @@ namespace Common.Controls
 		private void buttonAddNewRule_Click(object sender, EventArgs e)
 		{
 			if (comboBoxRuleTypes.SelectedIndex < 0) {
-				MessageBox.Show("Select a rule type first.");
+				//messageBox Arguments are (Text, Title, No Button Visible, Cancel Button Visible)
+				MessageBoxForm.msgIcon = SystemIcons.Warning; //this is used if you want to add a system icon to the message form.
+				var messageBox = new MessageBoxForm("Select a rule type first.",
+					"Warning", false, false);
+				messageBox.ShowDialog();
 				return;
 			}
 
@@ -409,6 +430,29 @@ namespace Common.Controls
 		private void numericUpDownItemCount_ValueChanged(object sender, EventArgs e)
 		{
 			PopulateNames();
+		}
+
+		private void buttonBackground_MouseHover(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.Properties.Resources.ButtonBackgroundImageHover;
+		}
+
+		private void buttonBackground_MouseLeave(object sender, EventArgs e)
+		{
+			var btn = (Button)sender;
+			btn.BackgroundImage = Resources.Properties.Resources.ButtonBackgroundImage;
+
+		}
+
+		private void groupBoxes_Paint(object sender, PaintEventArgs e)
+		{
+			ThemeGroupBoxRenderer.GroupBoxesDrawBorder(sender, e, Font);
+		}
+
+		private void comboBox_DrawItem(object sender, DrawItemEventArgs e)
+		{
+			ThemeComboBoxRenderer.DrawItem(sender, e);
 		}
 	}
 }

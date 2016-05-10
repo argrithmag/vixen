@@ -1,20 +1,14 @@
-﻿//#define OLDWAY
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.Serialization.Formatters;
-using System.Text;
 using Vixen.Data.Value;
 using Vixen.Intent;
 using Vixen.Sys;
 using Vixen.Module;
 using Vixen.Module.Effect;
 using Vixen.Sys.Attribute;
-using System.Drawing;
-using System.Threading.Tasks;
 using System.Threading;
-using System.Collections.Concurrent;
-using System.Diagnostics;
+using System.ComponentModel;
 
 namespace VixenModules.Effect.Nutcracker
 {
@@ -65,14 +59,18 @@ namespace VixenModules.Effect.Nutcracker
 				if (node != null)
 					RenderNode(node);
 			}
+
+			_elementIntents.Clear();
 		}
 
 		//Nutcracker is special right now as we only ever generate one intent per element, we can skip a lot of logic
 		//in the base class as if we are active, our intents are always in the relative time.
 		public override ElementIntents GetElementIntents(TimeSpan effectRelativeTime)
 		{
-			_elementIntents.Clear();
-			_AddLocalIntents();
+			if (!_elementIntents.Any())
+			{
+				_AddLocalIntents();
+			}
 			return _elementIntents;
 		}
 
@@ -97,22 +95,33 @@ namespace VixenModules.Effect.Nutcracker
 				_data.NutcrackerData.TargetNodes = TargetNodes;
 				return _data;
 			}
-			set { _data = value as NutcrackerModuleData; }
+			set
+			{
+				_data = value as NutcrackerModuleData;
+				IsDirty = true;
+			}
 		}
 
-		public double IntensityLevel
-		{
-			get { return 100; }
-			set { IsDirty = true; }
-		}
+		//public double IntensityLevel
+		//{
+		//	get { return 100; }
+		//	set { IsDirty = true; }
+		//}
 
-		public Color Color
+		//public Color Color
+		//{
+		//	get { return SystemColors.ActiveBorder; }
+		//	set { IsDirty = true; }
+		//}
+		[Category("Warning")]
+		[DisplayName(" ")]
+		public string Warning
 		{
-			get { return SystemColors.ActiveBorder; }
-			set { IsDirty = true; }
+			get { return "Not supported in this editor."; }
 		}
 
 		[Value]
+		[Browsable(false)]
 		public NutcrackerData NutcrackerData
 		{
 			get
@@ -127,8 +136,10 @@ namespace VixenModules.Effect.Nutcracker
 			}
 		}
 
+		[Browsable(false)]
 		public int StringCount { get; set; }
 
+		[Browsable(false)]
 		public int MaxPixelsPerString { get; set; }
 
 		private int CalculateMaxStringCount()
@@ -185,6 +196,7 @@ namespace VixenModules.Effect.Nutcracker
 				ht = MaxPixelsPerString;
 			}
 			int nFrames = (int)(TimeSpan.TotalMilliseconds / frameMs);
+			if (nFrames <= 0) return;
 			var nccore = new NutcrackerEffects(_data.NutcrackerData) {Duration = TimeSpan};
 			nccore.InitBuffer( wid, ht);
 			int numElements = node.Count();
@@ -199,7 +211,6 @@ namespace VixenModules.Effect.Nutcracker
 			var pixels = new RGBValue[numElements][];
 			for (int eidx = 0; eidx < numElements; eidx++)
 				pixels[eidx] = new RGBValue[nFrames];
-			List<ElementNode> nodes = FindLeafParents().ToList();
 			// generate all the pixels
 			for (int frameNum = 0; frameNum < nFrames; frameNum++)
 			{
